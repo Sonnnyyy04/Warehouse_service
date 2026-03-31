@@ -38,6 +38,9 @@ jobs:
     environment: production
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Prepare SSH key
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -94,12 +97,67 @@ jobs:
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             "${VPS_USER}@${VPS_HOST}" \
-            "VPS_APP_DIR='${VPS_APP_DIR}' GITHUB_REPOSITORY_URL='${GITHUB_REPOSITORY_URL}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' bash -s" <<'EOF'
+            "VPS_APP_DIR='${VPS_APP_DIR}' bash -s" <<'EOF'
+          set -euo pipefail
+
+          mkdir -p "${VPS_APP_DIR}"
+          EOF
+
+      - name: Upload project to server
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VPS_PORT}" ]; then
+            VPS_PORT=22
+          fi
+
+          tar \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=.gocache \
+            --exclude=.idea \
+            -czf - . | ssh \
+            -i ~/.ssh/id_ed25519 \
+            -p "${VPS_PORT}" \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o TCPKeepAlive=yes \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            "${VPS_USER}@${VPS_HOST}" \
+            "TMP_DIR=\$(mktemp -d) && tar -xzf - -C \"\${TMP_DIR}\" && rm -rf \"${VPS_APP_DIR}\"/* && cp -a \"\${TMP_DIR}\"/. \"${VPS_APP_DIR}\"/ && rm -rf \"\${TMP_DIR}\""
+
+      - name: Restart services on server
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VPS_PORT}" ]; then
+            VPS_PORT=22
+          fi
+
+          ssh \
+            -i ~/.ssh/id_ed25519 \
+            -p "${VPS_PORT}" \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o TCPKeepAlive=yes \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            "${VPS_USER}@${VPS_HOST}" \
+            "VPS_APP_DIR='${VPS_APP_DIR}' bash -s" <<'EOF'
           set -euo pipefail
 
           APP_DIR="${VPS_APP_DIR}"
-          REPO_URL="${GITHUB_REPOSITORY_URL}"
-          BRANCH="${DEPLOY_BRANCH}"
 
           if ! command -v docker >/dev/null 2>&1; then
             echo "docker is not installed on the server"
@@ -112,15 +170,7 @@ jobs:
             COMPOSE_CMD="docker compose"
           fi
 
-          if [ ! -d "${APP_DIR}/.git" ]; then
-            mkdir -p "\$(dirname "${APP_DIR}")"
-            git clone "${REPO_URL}" "${APP_DIR}"
-          fi
-
           cd "${APP_DIR}"
-          git fetch origin "${BRANCH}"
-          git checkout "${BRANCH}"
-          git pull --ff-only origin "${BRANCH}"
           ${COMPOSE_CMD} up -d --build
           ${COMPOSE_CMD} ps
           EOF

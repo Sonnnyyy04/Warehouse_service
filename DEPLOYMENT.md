@@ -13,7 +13,7 @@ On every push to `main`, GitHub Actions:
 1. runs `go test ./...`;
 2. builds the API binary from `./cmd/api`;
 3. connects to the VPS over SSH;
-4. updates the repository on the server;
+4. uploads the project files to the server;
 5. runs `docker-compose up -d --build`.
 
 ## Required GitHub Secrets
@@ -39,11 +39,11 @@ The server must already have:
 
 - Docker installed
 - Docker Compose available as `docker-compose` or `docker compose`
-- this repository cloned once, or permissions to clone it during deploy
+- a writable target directory for deployment
 
 ## Notes
 
 - The workflow deploys branch `main`.
-- The deploy job uses `git pull --ff-only origin main` on the server.
-- If server files were changed manually and diverged from `main`, deployment will fail until the server repository is cleaned up.
-- If `.env` is tracked in git, updates will also be pulled during deployment.
+- The deploy job uploads repository contents from GitHub Actions to the server over SSH.
+- `.git`, `.github`, `.gocache`, and `.idea` are excluded from upload.
+- If `.env` is tracked in git, the uploaded version will replace the server copy during deployment.
