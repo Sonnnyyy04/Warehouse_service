@@ -1,0 +1,359 @@
+basePath: /
+definitions:
+  handler.CreateOperationRequest:
+    properties:
+      details:
+        type: object
+      object_id:
+        type: integer
+      object_type:
+        type: string
+      operation_type:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  handler.CreateScanEventRequest:
+    properties:
+      device_info:
+        type: string
+      marker_code:
+        type: string
+      success:
+        type: boolean
+      user_id:
+        type: integer
+    type: object
+  handler.ErrorResponse:
+    properties:
+      error:
+        example: internal server error
+        type: string
+    type: object
+  handler.MoveBoxRequest:
+    properties:
+      box_marker_code:
+        type: string
+      to_storage_cell_marker_code:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  handler.ScanRequest:
+    properties:
+      device_info:
+        type: string
+      marker_code:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  models.MoveBoxResult:
+    properties:
+      box:
+        $ref: '#/definitions/models.ObjectCard'
+      operation:
+        $ref: '#/definitions/models.OperationHistory'
+    type: object
+  models.ObjectCard:
+    properties:
+      code:
+        type: string
+      location_code:
+        type: string
+      marker_code:
+        type: string
+      name:
+        type: string
+      object_id:
+        type: integer
+      object_type:
+        type: string
+      parent_code:
+        type: string
+      quantity:
+        type: integer
+      status:
+        type: string
+    type: object
+  models.OperationHistory:
+    properties:
+      created_at:
+        type: string
+      details:
+        type: object
+      id:
+        type: integer
+      object_id:
+        type: integer
+      object_type:
+        type: string
+      operation_type:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  models.ScanEvent:
+    properties:
+      device_info:
+        type: string
+      id:
+        type: integer
+      marker_code:
+        type: string
+      scanned_at:
+        type: string
+      success:
+        type: boolean
+      user_id:
+        type: integer
+    type: object
+  models.ScanResult:
+    properties:
+      object:
+        $ref: '#/definitions/models.ObjectCard'
+      scan_event:
+        $ref: '#/definitions/models.ScanEvent'
+    type: object
+info:
+  contact: {}
+  description: API для мобильных складских сценариев.
+  title: API сервиса склада
+  version: "1.0"
+paths:
+  /api/v1/boxes/move:
+    post:
+      consumes:
+      - application/json
+      description: Перемещает короб по коду маркера в целевую ячейку хранения и записывает
+        операцию в историю.
+      parameters:
+      - description: Данные для перемещения короба
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.MoveBoxRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Короб успешно перемещён
+          schema:
+            $ref: '#/definitions/models.MoveBoxResult'
+        "400":
+          description: Некорректный запрос
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Объект не найден
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "409":
+          description: Конфликт состояния
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Переместить короб в ячейку
+      tags:
+      - Короба
+  /api/v1/objects/by-marker:
+    get:
+      description: Возвращает унифицированную карточку объекта для указанного маркера.
+      parameters:
+      - description: Код маркера
+        in: query
+        name: marker_code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Карточка объекта
+          schema:
+            $ref: '#/definitions/models.ObjectCard'
+        "400":
+          description: Некорректный запрос
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Объект не найден
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Получить объект по коду маркера
+      tags:
+      - Объекты
+  /api/v1/operations:
+    get:
+      description: Возвращает последние складские операции.
+      parameters:
+      - description: Максимальное число записей; по умолчанию 50, максимум 200
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список операций
+          schema:
+            items:
+              $ref: '#/definitions/models.OperationHistory'
+            type: array
+        "400":
+          description: Некорректный запрос
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Получить историю операций
+      tags:
+      - Операции
+    post:
+      consumes:
+      - application/json
+      description: Сохраняет информацию об операции, выполненной над складским объектом.
+      parameters:
+      - description: Данные операции
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateOperationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Операция сохранена
+          schema:
+            $ref: '#/definitions/models.OperationHistory'
+        "400":
+          description: Некорректный запрос
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Создать запись истории операций
+      tags:
+      - Операции
+  /api/v1/scan:
+    post:
+      consumes:
+      - application/json
+      description: Находит объект по коду маркера и записывает событие сканирования.
+      parameters:
+      - description: Данные сканирования
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ScanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Результат сканирования
+          schema:
+            $ref: '#/definitions/models.ScanResult'
+        "400":
+          description: Некорректный запрос
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Объект не найден
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Сканировать объект по маркеру
+      tags:
+      - Сканирование
+  /api/v1/scan-events:
+    get:
+      description: Возвращает последние события сканирования маркеров.
+      parameters:
+      - description: Максимальное число записей; по умолчанию 50, максимум 200
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список событий сканирования
+          schema:
+            items:
+              $ref: '#/definitions/models.ScanEvent'
+            type: array
+        "400":
+          description: Некорректный запрос
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Получить события сканирования
+      tags:
+      - События сканирования
+    post:
+      consumes:
+      - application/json
+      description: Сохраняет попытку сканирования по коду маркера.
+      parameters:
+      - description: Данные события сканирования
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateScanEventRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Событие сканирования сохранено
+          schema:
+            $ref: '#/definitions/models.ScanEvent'
+        "400":
+          description: Некорректный запрос
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Создать событие сканирования
+      tags:
+      - События сканирования
+  /healthz:
+    get:
+      description: Проверяет готовность API через ping пула подключений PostgreSQL.
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Сервис доступен
+          schema:
+            type: string
+        "503":
+          description: База данных недоступна
+          schema:
+            type: string
+      summary: Проверка доступности
+      tags:
+      - Система
+swagger: "2.0"
