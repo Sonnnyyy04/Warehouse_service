@@ -171,6 +171,10 @@ jobs:
           fi
 
           cd "${APP_DIR}"
-          ${COMPOSE_CMD} up -d --build
+          ${COMPOSE_CMD} up -d --build --remove-orphans
+          docker container prune -f
+          docker image prune -af
+          docker builder prune -af
           ${COMPOSE_CMD} ps
+          docker system df
           EOF

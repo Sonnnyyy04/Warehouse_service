@@ -14,7 +14,8 @@ On every push to `main`, GitHub Actions:
 2. builds the API binary from `./cmd/api`;
 3. connects to the VPS over SSH;
 4. uploads the project files to the server;
-5. runs `docker-compose up -d --build`.
+5. runs `docker-compose up -d --build --remove-orphans`;
+6. prunes unused Docker containers, images, and build cache.
 
 ## Required GitHub Secrets
 
@@ -47,3 +48,9 @@ The server must already have:
 - The deploy job uploads repository contents from GitHub Actions to the server over SSH.
 - `.git`, `.github`, `.gocache`, and `.idea` are excluded from upload.
 - If `.env` is tracked in git, the uploaded version will replace the server copy during deployment.
+- PostgreSQL is intentionally not published to the public internet by default.
+- The deploy job prunes:
+  - unused containers
+  - unused images
+  - build cache
+- Docker volumes are not pruned automatically, so PostgreSQL data is preserved.
