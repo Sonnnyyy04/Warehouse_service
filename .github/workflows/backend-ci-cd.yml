@@ -94,6 +94,9 @@ jobs:
           ssh \
             -i ~/.ssh/id_ed25519 \
             -p "${VPS_PORT}" \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o TCPKeepAlive=yes \
             "${VPS_USER}@${VPS_HOST}" \
             "VPS_APP_DIR='${VPS_APP_DIR}' GITHUB_REPOSITORY_URL='${GITHUB_REPOSITORY_URL}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' bash -s" <<'EOF'
           set -euo pipefail
