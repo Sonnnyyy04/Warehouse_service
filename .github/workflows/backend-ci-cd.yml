@@ -171,6 +171,7 @@ jobs:
           fi
 
           cd "${APP_DIR}"
+          ${COMPOSE_CMD} rm -sf api migrate || true
           ${COMPOSE_CMD} up -d --build --remove-orphans
           docker container prune -f
           docker image prune -af

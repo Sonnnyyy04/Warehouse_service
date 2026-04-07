@@ -53,4 +53,5 @@ The server must already have:
   - unused containers
   - unused images
   - build cache
+- Before restart, the deploy job force-removes old `api` and `migrate` containers to avoid legacy `docker-compose` recreate issues on the VPS.
 - Docker volumes are not pruned automatically, so PostgreSQL data is preserved.
