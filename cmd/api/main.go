@@ -64,6 +64,13 @@ func main() {
 		productRepo,
 		batchRepo,
 	)
+	adminService := service.NewAdminService(
+		productRepo,
+		storageCellRepo,
+		boxRepo,
+		batchRepo,
+		markerRepo,
+	)
 
 	scanService := service.NewScanService(objectService, scanEventService)
 	moveBoxService := service.NewMoveBoxService(
@@ -79,6 +86,7 @@ func main() {
 	scanHandler := handler.NewScanHandler(scanService)
 	moveBoxHandler := handler.NewMoveBoxHandler(moveBoxService)
 	labelHandler := handler.NewLabelHandler(labelService)
+	adminHandler := handler.NewAdminHandler(adminService, labelService)
 
 	mux := http.NewServeMux()
 
@@ -169,14 +177,64 @@ func main() {
 	mux.HandleFunc("/admin/labels", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			labelHandler.AdminPage(w, r)
+			adminHandler.Page(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/admin/labels", http.StatusFound)
+		switch r.Method {
+		case http.MethodGet:
+			adminHandler.Page(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/admin/products", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			adminHandler.CreateProduct(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/admin/products/update", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			adminHandler.UpdateProduct(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/admin/storage-cells", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			adminHandler.CreateStorageCell(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/admin/boxes", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			adminHandler.CreateBox(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/admin/batches", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			adminHandler.CreateBatch(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
 	})
 
 	server := &http.Server{

@@ -47,3 +47,89 @@ WHERE id = $1
 
 	return batch, nil
 }
+
+func (r *BatchRepository) List(ctx context.Context, limit int32) ([]models.Batch, error) {
+	const query = `
+SELECT id, code, product_id, quantity, status, box_id, pallet_id, storage_cell_id
+FROM batches
+ORDER BY id
+LIMIT $1
+`
+
+	rows, err := r.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list batches: %w", err)
+	}
+	defer rows.Close()
+
+	batches := make([]models.Batch, 0)
+
+	for rows.Next() {
+		var batch models.Batch
+
+		if err := rows.Scan(
+			&batch.ID,
+			&batch.Code,
+			&batch.ProductID,
+			&batch.Quantity,
+			&batch.Status,
+			&batch.BoxID,
+			&batch.PalletID,
+			&batch.StorageCellID,
+		); err != nil {
+			return nil, fmt.Errorf("scan batch row: %w", err)
+		}
+
+		batches = append(batches, batch)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate batch rows: %w", err)
+	}
+
+	return batches, nil
+}
+
+func (r *BatchRepository) Create(
+	ctx context.Context,
+	code string,
+	productID int64,
+	quantity int32,
+	status string,
+	boxID *int64,
+	palletID *int64,
+	storageCellID *int64,
+) (models.Batch, error) {
+	const query = `
+INSERT INTO batches (code, product_id, quantity, status, box_id, pallet_id, storage_cell_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cell_id
+`
+
+	var batch models.Batch
+
+	if err := r.pool.QueryRow(
+		ctx,
+		query,
+		code,
+		productID,
+		quantity,
+		status,
+		boxID,
+		palletID,
+		storageCellID,
+	).Scan(
+		&batch.ID,
+		&batch.Code,
+		&batch.ProductID,
+		&batch.Quantity,
+		&batch.Status,
+		&batch.BoxID,
+		&batch.PalletID,
+		&batch.StorageCellID,
+	); err != nil {
+		return models.Batch{}, fmt.Errorf("create batch: %w", err)
+	}
+
+	return batch, nil
+}

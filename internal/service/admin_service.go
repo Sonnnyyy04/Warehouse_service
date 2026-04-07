@@ -1,0 +1,280 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	"Warehouse_service/internal/models"
+	"Warehouse_service/internal/repository"
+)
+
+var (
+	ErrInvalidAdminInput      = errors.New("invalid admin input")
+	ErrInvalidAdminReference  = errors.New("invalid admin reference")
+	ErrConflictingBatchTarget = errors.New("conflicting batch target")
+)
+
+type AdminProductRepository interface {
+	List(ctx context.Context, limit int32) ([]models.Product, error)
+	Create(ctx context.Context, sku, name, unit string) (models.Product, error)
+	Update(ctx context.Context, id int64, sku, name, unit string) (models.Product, error)
+}
+
+type AdminStorageCellRepository interface {
+	List(ctx context.Context, limit int32) ([]models.StorageCell, error)
+	Create(ctx context.Context, code, name string, zone *string, status string) (models.StorageCell, error)
+}
+
+type AdminBoxRepository interface {
+	List(ctx context.Context, limit int32) ([]models.Box, error)
+	Create(ctx context.Context, code, status string, storageCellID *int64) (models.Box, error)
+}
+
+type AdminBatchRepository interface {
+	List(ctx context.Context, limit int32) ([]models.Batch, error)
+	Create(ctx context.Context, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
+}
+
+type AdminMarkerRepository interface {
+	Create(ctx context.Context, markerCode, objectType string, objectID int64) (models.Marker, error)
+}
+
+type CreateProductInput struct {
+	SKU  string
+	Name string
+	Unit string
+}
+
+type UpdateProductInput struct {
+	ID   int64
+	SKU  string
+	Name string
+	Unit string
+}
+
+type CreateStorageCellInput struct {
+	Code string
+	Name string
+	Zone string
+}
+
+type CreateBoxInput struct {
+	Code          string
+	StorageCellID *int64
+}
+
+type CreateBatchInput struct {
+	Code          string
+	ProductID     int64
+	Quantity      int32
+	BoxID         *int64
+	StorageCellID *int64
+}
+
+type AdminService struct {
+	productRepo     AdminProductRepository
+	storageCellRepo AdminStorageCellRepository
+	boxRepo         AdminBoxRepository
+	batchRepo       AdminBatchRepository
+	markerRepo      AdminMarkerRepository
+}
+
+func NewAdminService(
+	productRepo AdminProductRepository,
+	storageCellRepo AdminStorageCellRepository,
+	boxRepo AdminBoxRepository,
+	batchRepo AdminBatchRepository,
+	markerRepo AdminMarkerRepository,
+) *AdminService {
+	return &AdminService{
+		productRepo:     productRepo,
+		storageCellRepo: storageCellRepo,
+		boxRepo:         boxRepo,
+		batchRepo:       batchRepo,
+		markerRepo:      markerRepo,
+	}
+}
+
+func (s *AdminService) ListProducts(ctx context.Context, limit int32) ([]models.Product, error) {
+	normalizedLimit, err := normalizeLimit(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.productRepo.List(ctx, normalizedLimit)
+}
+
+func (s *AdminService) ListStorageCells(ctx context.Context, limit int32) ([]models.StorageCell, error) {
+	normalizedLimit, err := normalizeLimit(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.storageCellRepo.List(ctx, normalizedLimit)
+}
+
+func (s *AdminService) ListBoxes(ctx context.Context, limit int32) ([]models.Box, error) {
+	normalizedLimit, err := normalizeLimit(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.boxRepo.List(ctx, normalizedLimit)
+}
+
+func (s *AdminService) ListBatches(ctx context.Context, limit int32) ([]models.Batch, error) {
+	normalizedLimit, err := normalizeLimit(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.batchRepo.List(ctx, normalizedLimit)
+}
+
+func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInput) (models.Product, models.Marker, error) {
+	sku := strings.TrimSpace(input.SKU)
+	name := strings.TrimSpace(input.Name)
+	unit := strings.TrimSpace(input.Unit)
+	if unit == "" {
+		unit = "pcs"
+	}
+
+	if sku == "" || name == "" {
+		return models.Product{}, models.Marker{}, ErrInvalidAdminInput
+	}
+
+	product, err := s.productRepo.Create(ctx, sku, name, unit)
+	if err != nil {
+		return models.Product{}, models.Marker{}, err
+	}
+
+	marker, err := s.markerRepo.Create(ctx, buildMarkerCode("product", product.ID), "product", product.ID)
+	if err != nil {
+		return models.Product{}, models.Marker{}, err
+	}
+
+	return product, marker, nil
+}
+
+func (s *AdminService) UpdateProduct(ctx context.Context, input UpdateProductInput) (models.Product, error) {
+	sku := strings.TrimSpace(input.SKU)
+	name := strings.TrimSpace(input.Name)
+	unit := strings.TrimSpace(input.Unit)
+	if unit == "" {
+		unit = "pcs"
+	}
+
+	if input.ID <= 0 || sku == "" || name == "" {
+		return models.Product{}, ErrInvalidAdminInput
+	}
+
+	product, err := s.productRepo.Update(ctx, input.ID, sku, name, unit)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.Product{}, ErrInvalidAdminReference
+		}
+		return models.Product{}, err
+	}
+
+	return product, nil
+}
+
+func (s *AdminService) CreateStorageCell(ctx context.Context, input CreateStorageCellInput) (models.StorageCell, models.Marker, error) {
+	code := strings.TrimSpace(input.Code)
+	name := strings.TrimSpace(input.Name)
+	zone := strings.TrimSpace(input.Zone)
+	if name == "" {
+		name = code
+	}
+
+	if code == "" {
+		return models.StorageCell{}, models.Marker{}, ErrInvalidAdminInput
+	}
+
+	var zoneValue *string
+	if zone != "" {
+		zoneValue = &zone
+	}
+
+	cell, err := s.storageCellRepo.Create(ctx, code, name, zoneValue, "active")
+	if err != nil {
+		return models.StorageCell{}, models.Marker{}, err
+	}
+
+	marker, err := s.markerRepo.Create(ctx, buildMarkerCode("storage_cell", cell.ID), "storage_cell", cell.ID)
+	if err != nil {
+		return models.StorageCell{}, models.Marker{}, err
+	}
+
+	return cell, marker, nil
+}
+
+func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (models.Box, models.Marker, error) {
+	code := strings.TrimSpace(input.Code)
+	if code == "" {
+		return models.Box{}, models.Marker{}, ErrInvalidAdminInput
+	}
+
+	box, err := s.boxRepo.Create(ctx, code, "active", input.StorageCellID)
+	if err != nil {
+		return models.Box{}, models.Marker{}, err
+	}
+
+	marker, err := s.markerRepo.Create(ctx, buildMarkerCode("box", box.ID), "box", box.ID)
+	if err != nil {
+		return models.Box{}, models.Marker{}, err
+	}
+
+	return box, marker, nil
+}
+
+func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) (models.Batch, models.Marker, error) {
+	code := strings.TrimSpace(input.Code)
+	if code == "" || input.ProductID <= 0 || input.Quantity <= 0 {
+		return models.Batch{}, models.Marker{}, ErrInvalidAdminInput
+	}
+
+	if input.BoxID != nil && input.StorageCellID != nil {
+		return models.Batch{}, models.Marker{}, ErrConflictingBatchTarget
+	}
+
+	batch, err := s.batchRepo.Create(
+		ctx,
+		code,
+		input.ProductID,
+		input.Quantity,
+		"active",
+		input.BoxID,
+		nil,
+		input.StorageCellID,
+	)
+	if err != nil {
+		return models.Batch{}, models.Marker{}, err
+	}
+
+	marker, err := s.markerRepo.Create(ctx, buildMarkerCode("batch", batch.ID), "batch", batch.ID)
+	if err != nil {
+		return models.Batch{}, models.Marker{}, err
+	}
+
+	return batch, marker, nil
+}
+
+func buildMarkerCode(objectType string, objectID int64) string {
+	switch objectType {
+	case "storage_cell":
+		return fmt.Sprintf("MRK-CELL-%03d", objectID)
+	case "pallet":
+		return fmt.Sprintf("MRK-PALLET-%03d", objectID)
+	case "box":
+		return fmt.Sprintf("MRK-BOX-%03d", objectID)
+	case "product":
+		return fmt.Sprintf("MRK-PRODUCT-%03d", objectID)
+	case "batch":
+		return fmt.Sprintf("MRK-BATCH-%03d", objectID)
+	default:
+		return fmt.Sprintf("MRK-OBJECT-%03d", objectID)
+	}
+}

@@ -44,3 +44,64 @@ WHERE id = $1
 
 	return cell, nil
 }
+
+func (r *StorageCellRepository) List(ctx context.Context, limit int32) ([]models.StorageCell, error) {
+	const query = `
+SELECT id, code, name, zone, status
+FROM storage_cells
+ORDER BY id
+LIMIT $1
+`
+
+	rows, err := r.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list storage cells: %w", err)
+	}
+	defer rows.Close()
+
+	cells := make([]models.StorageCell, 0)
+
+	for rows.Next() {
+		var cell models.StorageCell
+
+		if err := rows.Scan(
+			&cell.ID,
+			&cell.Code,
+			&cell.Name,
+			&cell.Zone,
+			&cell.Status,
+		); err != nil {
+			return nil, fmt.Errorf("scan storage cell row: %w", err)
+		}
+
+		cells = append(cells, cell)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate storage cell rows: %w", err)
+	}
+
+	return cells, nil
+}
+
+func (r *StorageCellRepository) Create(ctx context.Context, code, name string, zone *string, status string) (models.StorageCell, error) {
+	const query = `
+INSERT INTO storage_cells (code, name, zone, status)
+VALUES ($1, $2, $3, $4)
+RETURNING id, code, name, zone, status
+`
+
+	var cell models.StorageCell
+
+	if err := r.pool.QueryRow(ctx, query, code, name, zone, status).Scan(
+		&cell.ID,
+		&cell.Code,
+		&cell.Name,
+		&cell.Zone,
+		&cell.Status,
+	); err != nil {
+		return models.StorageCell{}, fmt.Errorf("create storage cell: %w", err)
+	}
+
+	return cell, nil
+}

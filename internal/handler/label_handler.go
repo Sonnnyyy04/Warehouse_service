@@ -14,6 +14,7 @@ import (
 
 type LabelUseCase interface {
 	List(ctx context.Context, objectType string, limit int32) ([]models.Label, error)
+	ListSelected(ctx context.Context, objectType string, markerCodes []string) ([]models.Label, error)
 	GenerateQRCodePNG(markerCode string, size int) ([]byte, error)
 	GenerateLabelsPDF(labels []models.Label) ([]byte, error)
 }
@@ -46,17 +47,7 @@ func (h *LabelHandler) List(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	var limit int32
-	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
-		parsedLimit, err := strconv.Atoi(rawLimit)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
-			return
-		}
-		limit = int32(parsedLimit)
-	}
-
-	labels, err := h.useCase.List(ctx, r.URL.Query().Get("object_type"), limit)
+	labels, err := h.listLabels(ctx, r)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidLabelObjectType):
@@ -114,16 +105,8 @@ func (h *LabelHandler) PrintPage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	var limit int32
-	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
-		parsedLimit, err := strconv.Atoi(rawLimit)
-		if err == nil {
-			limit = int32(parsedLimit)
-		}
-	}
-
 	objectType := r.URL.Query().Get("object_type")
-	labels, err := h.useCase.List(ctx, objectType, limit)
+	labels, err := h.listLabels(ctx, r)
 	if err != nil {
 		http.Error(w, "failed to load labels", http.StatusInternalServerError)
 		return
@@ -149,18 +132,8 @@ func (h *LabelHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	var limit int32
-	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
-		parsedLimit, err := strconv.Atoi(rawLimit)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
-			return
-		}
-		limit = int32(parsedLimit)
-	}
-
 	objectType := r.URL.Query().Get("object_type")
-	labels, err := h.useCase.List(ctx, objectType, limit)
+	labels, err := h.listLabels(ctx, r)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidLabelObjectType):
@@ -188,6 +161,26 @@ func (h *LabelHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+fileName+`"`)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(pdfBytes)
+}
+
+func (h *LabelHandler) listLabels(ctx context.Context, r *http.Request) ([]models.Label, error) {
+	markerCodes := r.URL.Query()["marker_code"]
+	objectType := r.URL.Query().Get("object_type")
+
+	if len(markerCodes) > 0 {
+		return h.useCase.ListSelected(ctx, objectType, markerCodes)
+	}
+
+	var limit int32
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			return nil, service.ErrInvalidLimit
+		}
+		limit = int32(parsedLimit)
+	}
+
+	return h.useCase.List(ctx, objectType, limit)
 }
 
 func (h *LabelHandler) AdminPage(w http.ResponseWriter, r *http.Request) {

@@ -21,6 +21,7 @@ var (
 
 type LabelMarkerRepository interface {
 	List(ctx context.Context, objectType string, limit int32) ([]models.Marker, error)
+	ListByCodes(ctx context.Context, objectType string, markerCodes []string) ([]models.Marker, error)
 }
 
 type LabelStorageCellRepository interface {
@@ -82,6 +83,38 @@ func (s *LabelService) List(ctx context.Context, objectType string, limit int32)
 	}
 
 	markers, err := s.markerRepo.List(ctx, objectType, normalizedLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	labels := make([]models.Label, 0, len(markers))
+
+	for _, marker := range markers {
+		label, err := s.buildLabel(ctx, marker)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				continue
+			}
+			return nil, err
+		}
+
+		labels = append(labels, label)
+	}
+
+	return labels, nil
+}
+
+func (s *LabelService) ListSelected(ctx context.Context, objectType string, markerCodes []string) ([]models.Label, error) {
+	objectType = strings.TrimSpace(objectType)
+	if objectType != "" && !isSupportedLabelObjectType(objectType) {
+		return nil, ErrInvalidLabelObjectType
+	}
+
+	if len(markerCodes) == 0 {
+		return []models.Label{}, nil
+	}
+
+	markers, err := s.markerRepo.ListByCodes(ctx, objectType, markerCodes)
 	if err != nil {
 		return nil, err
 	}

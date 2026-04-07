@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"Warehouse_service/internal/models"
 
@@ -90,4 +91,77 @@ FROM markers
 	}
 
 	return markers, nil
+}
+
+func (r *MarkerRepository) ListByCodes(ctx context.Context, objectType string, markerCodes []string) ([]models.Marker, error) {
+	query := `
+SELECT id, marker_code, object_type::text, object_id
+FROM markers
+WHERE marker_code = ANY($1)
+`
+
+	args := []any{markerCodes}
+
+	if objectType != "" {
+		query += "AND object_type = $2\n"
+		args = append(args, objectType)
+	}
+
+	query += "ORDER BY id"
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list markers by codes: %w", err)
+	}
+	defer rows.Close()
+
+	markers := make([]models.Marker, 0)
+
+	for rows.Next() {
+		var marker models.Marker
+
+		if err := rows.Scan(
+			&marker.ID,
+			&marker.MarkerCode,
+			&marker.ObjectType,
+			&marker.ObjectID,
+		); err != nil {
+			return nil, fmt.Errorf("scan marker by code row: %w", err)
+		}
+
+		markers = append(markers, marker)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate marker by code rows: %w", err)
+	}
+
+	return markers, nil
+}
+
+func (r *MarkerRepository) Create(ctx context.Context, markerCode, objectType string, objectID int64) (models.Marker, error) {
+	const query = `
+INSERT INTO markers (marker_code, object_type, object_id)
+VALUES ($1, $2::object_type, $3)
+RETURNING id, marker_code, object_type::text, object_id
+`
+
+	var marker models.Marker
+
+	if err := r.pool.QueryRow(
+		ctx,
+		query,
+		strings.TrimSpace(markerCode),
+		strings.TrimSpace(objectType),
+		objectID,
+	).Scan(
+		&marker.ID,
+		&marker.MarkerCode,
+		&marker.ObjectType,
+		&marker.ObjectID,
+	); err != nil {
+		return models.Marker{}, fmt.Errorf("create marker: %w", err)
+	}
+
+	return marker, nil
 }
