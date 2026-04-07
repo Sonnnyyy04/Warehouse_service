@@ -15,7 +15,7 @@ On every push to `main`, GitHub Actions:
 3. connects to the VPS over SSH;
 4. uploads the project files to the server;
 5. runs `docker-compose up -d --build --remove-orphans`;
-6. prunes unused Docker containers, images, and build cache.
+6. prunes only lightweight unused Docker artifacts and keeps reusable build cache for more stable deploys.
 
 ## Required GitHub Secrets
 
@@ -51,7 +51,8 @@ The server must already have:
 - PostgreSQL is intentionally not published to the public internet by default.
 - The deploy job prunes:
   - unused containers
-  - unused images
-  - build cache
+  - dangling images
+  - dangling build cache
 - Before restart, the deploy job force-removes old `api` and `migrate` containers to avoid legacy `docker-compose` recreate issues on the VPS.
+- The restart step retries `docker-compose up -d --build --remove-orphans` up to 3 times to survive transient Docker Hub / network timeouts.
 - Docker volumes are not pruned automatically, so PostgreSQL data is preserved.

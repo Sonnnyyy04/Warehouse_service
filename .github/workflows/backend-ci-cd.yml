@@ -172,10 +172,19 @@ jobs:
 
           cd "${APP_DIR}"
           ${COMPOSE_CMD} rm -sf api migrate || true
-          ${COMPOSE_CMD} up -d --build --remove-orphans
+          retry_count=0
+          until ${COMPOSE_CMD} up -d --build --remove-orphans; do
+            retry_count=$((retry_count + 1))
+            if [ "${retry_count}" -ge 3 ]; then
+              echo "docker compose up failed after ${retry_count} attempts"
+              exit 1
+            fi
+            echo "docker compose up failed, retrying in 15 seconds..."
+            sleep 15
+          done
           docker container prune -f
-          docker image prune -af
-          docker builder prune -af
+          docker image prune -f
+          docker builder prune -f
           ${COMPOSE_CMD} ps
           docker system df
           EOF
