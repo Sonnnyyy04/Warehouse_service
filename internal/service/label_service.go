@@ -1,13 +1,16 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"Warehouse_service/internal/models"
 	"Warehouse_service/internal/repository"
 
+	"github.com/phpdave11/gofpdf"
 	"github.com/skip2/go-qrcode"
 )
 
@@ -115,6 +118,89 @@ func (s *LabelService) GenerateQRCodePNG(markerCode string, size int) ([]byte, e
 	}
 
 	return qrcode.Encode(markerCode, qrcode.Medium, size)
+}
+
+func (s *LabelService) GenerateLabelsPDF(labels []models.Label) ([]byte, error) {
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetTitle("Warehouse Labels", false)
+	pdf.SetAuthor("Warehouse Service", false)
+	pdf.SetMargins(10, 10, 10)
+	pdf.SetAutoPageBreak(false, 10)
+
+	const (
+		columns     = 3
+		rows        = 3
+		marginX     = 10.0
+		marginY     = 10.0
+		gapX        = 4.0
+		gapY        = 4.0
+		qrSize      = 28.0
+		topOffset   = 10.0
+		titleOffset = 44.0
+		nameOffset  = 56.0
+		markerY     = 74.0
+	)
+
+	pageW, pageH := 210.0, 297.0
+	cardW := (pageW - (2 * marginX) - (gapX * float64(columns-1))) / float64(columns)
+	cardH := (pageH - (2 * marginY) - (gapY * float64(rows-1))) / float64(rows)
+
+	for index, label := range labels {
+		if index%(columns*rows) == 0 {
+			pdf.AddPage()
+		}
+
+		position := index % (columns * rows)
+		col := position % columns
+		row := position / columns
+
+		x := marginX + float64(col)*(cardW+gapX)
+		y := marginY + float64(row)*(cardH+gapY)
+
+		pdf.SetDrawColor(209, 213, 219)
+		pdf.SetFillColor(255, 255, 255)
+		pdf.RoundedRect(x, y, cardW, cardH, 4, "1234", "DF")
+
+		pdf.SetXY(x+8, y+topOffset)
+		pdf.SetFont("Arial", "B", 8)
+		pdf.SetTextColor(107, 114, 128)
+		pdf.CellFormat(cardW-16, 4, strings.ToUpper(label.ObjectType), "", 0, "L", false, 0, "")
+
+		qrBytes, err := s.GenerateQRCodePNG(label.MarkerCode, 256)
+		if err != nil {
+			return nil, err
+		}
+
+		imageID := fmt.Sprintf("label-qr-%d", index)
+		options := gofpdf.ImageOptions{
+			ImageType: "PNG",
+			ReadDpi:   true,
+		}
+		pdf.RegisterImageOptionsReader(imageID, options, bytes.NewReader(qrBytes))
+		pdf.ImageOptions(imageID, x+(cardW-qrSize)/2, y+16, qrSize, qrSize, false, options, 0, "")
+
+		pdf.SetXY(x+8, y+titleOffset)
+		pdf.SetFont("Arial", "B", 16)
+		pdf.SetTextColor(31, 41, 55)
+		pdf.CellFormat(cardW-16, 8, label.Code, "", 0, "L", false, 0, "")
+
+		pdf.SetXY(x+8, y+nameOffset)
+		pdf.SetFont("Arial", "", 11)
+		pdf.SetTextColor(55, 65, 81)
+		pdf.MultiCell(cardW-16, 5, label.Name, "", "L", false)
+
+		pdf.SetXY(x+8, y+markerY)
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(107, 114, 128)
+		pdf.MultiCell(cardW-16, 4.5, label.MarkerCode, "", "L", false)
+	}
+
+	var output bytes.Buffer
+	if err := pdf.Output(&output); err != nil {
+		return nil, err
+	}
+
+	return output.Bytes(), nil
 }
 
 func (s *LabelService) buildLabel(ctx context.Context, marker models.Marker) (models.Label, error) {

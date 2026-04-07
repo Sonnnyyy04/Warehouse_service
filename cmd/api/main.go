@@ -157,6 +157,15 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/labels/pdf", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			labelHandler.DownloadPDF(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/admin/labels", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

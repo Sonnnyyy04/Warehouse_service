@@ -19,6 +19,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
+	github.com/phpdave11/gofpdf v1.4.3 // indirect
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
 	github.com/swaggo/files/v2 v2.0.0 // indirect
 	github.com/swaggo/http-swagger/v2 v2.0.2 // indirect

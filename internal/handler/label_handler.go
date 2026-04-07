@@ -15,6 +15,7 @@ import (
 type LabelUseCase interface {
 	List(ctx context.Context, objectType string, limit int32) ([]models.Label, error)
 	GenerateQRCodePNG(markerCode string, size int) ([]byte, error)
+	GenerateLabelsPDF(labels []models.Label) ([]byte, error)
 }
 
 type LabelHandler struct {
@@ -144,6 +145,51 @@ func (h *LabelHandler) PrintPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *LabelHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	var limit int32
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+			return
+		}
+		limit = int32(parsedLimit)
+	}
+
+	objectType := r.URL.Query().Get("object_type")
+	labels, err := h.useCase.List(ctx, objectType, limit)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidLabelObjectType):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid object_type"})
+		case errors.Is(err, service.ErrInvalidLimit):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	pdfBytes, err := h.useCase.GenerateLabelsPDF(labels)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate pdf"})
+		return
+	}
+
+	fileName := "warehouse-labels.pdf"
+	if objectType != "" {
+		fileName = "warehouse-labels-" + objectType + ".pdf"
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+fileName+`"`)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(pdfBytes)
+}
+
 func (h *LabelHandler) AdminPage(w http.ResponseWriter, r *http.Request) {
 	objectType := r.URL.Query().Get("object_type")
 	if objectType == "" {
@@ -232,6 +278,14 @@ const printLabelsTemplate = `<!DOCTYPE html>
       padding: 12px 18px;
       font-weight: 700;
       cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .secondary-button {
+      background: #e7f3f1;
+      color: var(--accent);
     }
     .grid {
       display: grid;
@@ -290,7 +344,10 @@ const printLabelsTemplate = `<!DOCTYPE html>
         <h1>Печать QR-наклеек</h1>
         <p>Тип: {{if .ObjectType}}{{.ObjectType}}{{else}}all{{end}} | Количество: {{len .Labels}}</p>
       </div>
-      <button class="print-button" onclick="window.print()">Печать</button>
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <button class="print-button" onclick="window.print()">Печать</button>
+        <a class="print-button secondary-button" href="/labels/pdf?object_type={{.ObjectType}}&limit={{len .Labels}}">Скачать PDF</a>
+      </div>
     </div>
     <div class="grid">
       {{range .Labels}}
@@ -415,6 +472,9 @@ const adminLabelsTemplate = `<!DOCTYPE html>
       color: var(--ink);
       background: #f8fafc;
     }
+    .button-secondary:hover {
+      background: #eef2f7;
+    }
     .links {
       display: grid;
       gap: 10px;
@@ -458,6 +518,7 @@ const adminLabelsTemplate = `<!DOCTYPE html>
 
           <div class="actions">
             <button class="button" type="submit">Открыть страницу печати</button>
+            <a class="button-secondary" href="/labels/pdf?object_type={{.SelectedType}}&limit={{.Limit}}" target="_blank" rel="noreferrer">Скачать PDF</a>
             <a class="button-secondary" href="/swagger/" target="_blank" rel="noreferrer">Swagger</a>
           </div>
         </form>
@@ -468,10 +529,15 @@ const adminLabelsTemplate = `<!DOCTYPE html>
         <h2>Быстрые ссылки</h2>
         <div class="links">
           <a href="/labels/print?object_type=box&limit=100" target="_blank" rel="noreferrer">Печать коробов</a>
+          <a href="/labels/pdf?object_type=box&limit=100" target="_blank" rel="noreferrer">PDF коробов</a>
           <a href="/labels/print?object_type=storage_cell&limit=100" target="_blank" rel="noreferrer">Печать ячеек</a>
+          <a href="/labels/pdf?object_type=storage_cell&limit=100" target="_blank" rel="noreferrer">PDF ячеек</a>
           <a href="/labels/print?object_type=pallet&limit=100" target="_blank" rel="noreferrer">Печать паллет</a>
+          <a href="/labels/pdf?object_type=pallet&limit=100" target="_blank" rel="noreferrer">PDF паллет</a>
           <a href="/labels/print?object_type=batch&limit=100" target="_blank" rel="noreferrer">Печать партий</a>
+          <a href="/labels/pdf?object_type=batch&limit=100" target="_blank" rel="noreferrer">PDF партий</a>
           <a href="/labels/print?object_type=product&limit=100" target="_blank" rel="noreferrer">Печать товаров</a>
+          <a href="/labels/pdf?object_type=product&limit=100" target="_blank" rel="noreferrer">PDF товаров</a>
         </div>
         <p class="hint">Эту страницу удобно сохранить в закладки и использовать как простую админку для расклейки QR-кодов на складе.</p>
       </article>
