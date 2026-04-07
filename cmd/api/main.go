@@ -56,6 +56,14 @@ func main() {
 
 	scanEventService := service.NewScanEventService(scanEventRepo)
 	operationHistoryService := service.NewOperationHistoryService(operationHistoryRepo)
+	labelService := service.NewLabelService(
+		markerRepo,
+		storageCellRepo,
+		palletRepo,
+		boxRepo,
+		productRepo,
+		batchRepo,
+	)
 
 	scanService := service.NewScanService(objectService, scanEventService)
 	moveBoxService := service.NewMoveBoxService(
@@ -70,6 +78,7 @@ func main() {
 	operationHistoryHandler := handler.NewOperationHistoryHandler(operationHistoryService)
 	scanHandler := handler.NewScanHandler(scanService)
 	moveBoxHandler := handler.NewMoveBoxHandler(moveBoxService)
+	labelHandler := handler.NewLabelHandler(labelService)
 
 	mux := http.NewServeMux()
 
@@ -116,6 +125,33 @@ func main() {
 		switch r.Method {
 		case http.MethodPost:
 			scanHandler.Execute(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/v1/labels", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			labelHandler.List(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/v1/labels/qr", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			labelHandler.RenderQR(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/labels/print", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			labelHandler.PrintPage(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
