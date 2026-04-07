@@ -157,6 +157,19 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/admin/labels", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			labelHandler.AdminPage(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin/labels", http.StatusFound)
+	})
+
 	server := &http.Server{
 		Addr:              ":" + cfg.AppPort,
 		Handler:           mux,

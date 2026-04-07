@@ -21,6 +21,11 @@ type LabelHandler struct {
 	useCase LabelUseCase
 }
 
+type labelAdminOption struct {
+	Value string
+	Label string
+}
+
 func NewLabelHandler(useCase LabelUseCase) *LabelHandler {
 	return &LabelHandler{useCase: useCase}
 }
@@ -132,6 +137,43 @@ func (h *LabelHandler) PrintPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tpl := template.Must(template.New("labels").Parse(printLabelsTemplate))
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tpl.Execute(w, data); err != nil {
+		http.Error(w, "failed to render page", http.StatusInternalServerError)
+	}
+}
+
+func (h *LabelHandler) AdminPage(w http.ResponseWriter, r *http.Request) {
+	objectType := r.URL.Query().Get("object_type")
+	if objectType == "" {
+		objectType = "box"
+	}
+
+	limit := 100
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		if parsedLimit, err := strconv.Atoi(rawLimit); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	data := struct {
+		SelectedType string
+		Limit        int
+		Options      []labelAdminOption
+	}{
+		SelectedType: objectType,
+		Limit:        limit,
+		Options: []labelAdminOption{
+			{Value: "box", Label: "Короба"},
+			{Value: "storage_cell", Label: "Ячейки"},
+			{Value: "pallet", Label: "Паллеты"},
+			{Value: "batch", Label: "Партии"},
+			{Value: "product", Label: "Товары"},
+		},
+	}
+
+	tpl := template.Must(template.New("labels-admin").Parse(adminLabelsTemplate))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tpl.Execute(w, data); err != nil {
@@ -262,5 +304,178 @@ const printLabelsTemplate = `<!DOCTYPE html>
       {{end}}
     </div>
   </div>
+</body>
+</html>`
+
+const adminLabelsTemplate = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Warehouse Admin Labels</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #637083;
+      --paper: #ffffff;
+      --line: #d8dde6;
+      --accent: #0f766e;
+      --accent-dark: #115e59;
+      --bg: linear-gradient(180deg, #f2f0ea 0%, #eef6f4 100%);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, sans-serif;
+    }
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+    .hero {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 28px;
+      box-shadow: 0 18px 40px rgba(23, 32, 51, 0.08);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      max-width: 720px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      margin-top: 22px;
+    }
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 24px;
+    }
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 22px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    select, input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      margin-bottom: 14px;
+      background: white;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .button, .button-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 0 18px;
+      border-radius: 14px;
+      text-decoration: none;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .button {
+      border: none;
+      background: var(--accent);
+      color: white;
+    }
+    .button:hover {
+      background: var(--accent-dark);
+    }
+    .button-secondary {
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: #f8fafc;
+    }
+    .links {
+      display: grid;
+      gap: 10px;
+    }
+    .links a {
+      color: var(--accent-dark);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .links a:hover {
+      text-decoration: underline;
+    }
+    .hint {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>Печать QR-наклеек</h1>
+      <p class="subtitle">Администратор открывает эту страницу, выбирает тип складских объектов и получает готовую страницу печати с QR-кодами для коробов, ячеек, паллет и других сущностей.</p>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <h2>Открыть печать</h2>
+        <form action="/labels/print" method="get" target="_blank">
+          <label for="object_type">Тип объекта</label>
+          <select id="object_type" name="object_type">
+            {{range .Options}}
+            <option value="{{.Value}}" {{if eq $.SelectedType .Value}}selected{{end}}>{{.Label}}</option>
+            {{end}}
+          </select>
+
+          <label for="limit">Сколько наклеек загрузить</label>
+          <input id="limit" type="number" min="1" max="200" name="limit" value="{{.Limit}}" />
+
+          <div class="actions">
+            <button class="button" type="submit">Открыть страницу печати</button>
+            <a class="button-secondary" href="/swagger/" target="_blank" rel="noreferrer">Swagger</a>
+          </div>
+        </form>
+        <p class="hint">После открытия страницы нажмите «Печать» в самом интерфейсе печати или используйте печать браузера.</p>
+      </article>
+
+      <article class="panel">
+        <h2>Быстрые ссылки</h2>
+        <div class="links">
+          <a href="/labels/print?object_type=box&limit=100" target="_blank" rel="noreferrer">Печать коробов</a>
+          <a href="/labels/print?object_type=storage_cell&limit=100" target="_blank" rel="noreferrer">Печать ячеек</a>
+          <a href="/labels/print?object_type=pallet&limit=100" target="_blank" rel="noreferrer">Печать паллет</a>
+          <a href="/labels/print?object_type=batch&limit=100" target="_blank" rel="noreferrer">Печать партий</a>
+          <a href="/labels/print?object_type=product&limit=100" target="_blank" rel="noreferrer">Печать товаров</a>
+        </div>
+        <p class="hint">Эту страницу удобно сохранить в закладки и использовать как простую админку для расклейки QR-кодов на складе.</p>
+      </article>
+    </section>
+  </main>
 </body>
 </html>`
