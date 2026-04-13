@@ -115,9 +115,13 @@ func (h *LabelHandler) PrintPage(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		ObjectType string
 		Labels     []models.Label
+		MarkerCodes []string
+		AccessToken string
 	}{
 		ObjectType: objectType,
 		Labels:     labels,
+		MarkerCodes: r.URL.Query()["marker_code"],
+		AccessToken: r.URL.Query().Get("access_token"),
 	}
 
 	tpl := template.Must(template.New("labels").Parse(printLabelsTemplate))

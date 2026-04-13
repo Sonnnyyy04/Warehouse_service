@@ -65,6 +65,9 @@ func (m *AuthMiddleware) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 func (m *AuthMiddleware) authenticateRequest(r *http.Request) (models.User, models.UserSession, error) {
 	token := extractBearerToken(r.Header.Get("Authorization"))
 	if token == "" {
+		token = r.URL.Query().Get("access_token")
+	}
+	if token == "" {
 		if cookie, err := r.Cookie(sessionCookieName); err == nil {
 			token = cookie.Value
 		}
