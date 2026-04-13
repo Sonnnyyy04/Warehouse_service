@@ -73,6 +73,7 @@ func main() {
 		boxRepo,
 		batchRepo,
 		markerRepo,
+		userRepo,
 	)
 
 	scanService := service.NewScanService(objectService, scanEventService)
@@ -194,6 +195,17 @@ func main() {
 		switch r.Method {
 		case http.MethodGet:
 			labelHandler.List(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/admin/workers", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminHandler.ListWorkersAPI(w, r)
+		case http.MethodPost:
+			adminHandler.CreateWorkerAPI(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

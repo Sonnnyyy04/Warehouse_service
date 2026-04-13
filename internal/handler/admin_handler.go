@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"net/http"
@@ -18,11 +19,13 @@ type AdminUseCase interface {
 	ListStorageCells(ctx context.Context, limit int32) ([]models.StorageCell, error)
 	ListBoxes(ctx context.Context, limit int32) ([]models.Box, error)
 	ListBatches(ctx context.Context, limit int32) ([]models.Batch, error)
+	ListWorkers(ctx context.Context, limit int32) ([]models.User, error)
 	CreateProduct(ctx context.Context, input service.CreateProductInput) (models.Product, models.Marker, error)
 	UpdateProduct(ctx context.Context, input service.UpdateProductInput) (models.Product, error)
 	CreateStorageCell(ctx context.Context, input service.CreateStorageCellInput) (models.StorageCell, models.Marker, error)
 	CreateBox(ctx context.Context, input service.CreateBoxInput) (models.Box, models.Marker, error)
 	CreateBatch(ctx context.Context, input service.CreateBatchInput) (models.Batch, models.Marker, error)
+	CreateWorker(ctx context.Context, input service.CreateWorkerInput) (models.User, error)
 }
 
 type AdminLabelUseCase interface {
@@ -270,6 +273,72 @@ func (h *AdminHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.redirectWithNotice(w, r, "batch", "Партия "+batch.Code+" создана, QR: "+marker.MarkerCode)
+}
+
+type createWorkerRequest struct {
+	Login    string `json:"login"`
+	FullName string `json:"full_name"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
+}
+
+func (h *AdminHandler) ListWorkersAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var limit int32
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+			return
+		}
+		limit = int32(parsedLimit)
+	}
+
+	workers, err := h.adminUseCase.ListWorkers(ctx, limit)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidLimit):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, workers)
+}
+
+func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req createWorkerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	worker, err := h.adminUseCase.CreateWorker(ctx, service.CreateWorkerInput{
+		Login:    req.Login,
+		FullName: req.FullName,
+		Password: req.Password,
+		Email:    req.Email,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login, full_name and password are required"})
+		case errors.Is(err, service.ErrAdminConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "worker login already exists"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, worker)
 }
 
 func (h *AdminHandler) redirectWithAdminError(w http.ResponseWriter, r *http.Request, err error) {

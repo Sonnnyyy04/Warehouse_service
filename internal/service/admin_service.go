@@ -8,12 +8,15 @@ import (
 
 	"Warehouse_service/internal/models"
 	"Warehouse_service/internal/repository"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
 	ErrInvalidAdminInput      = errors.New("invalid admin input")
 	ErrInvalidAdminReference  = errors.New("invalid admin reference")
 	ErrConflictingBatchTarget = errors.New("conflicting batch target")
+	ErrAdminConflict          = errors.New("admin conflict")
 )
 
 type AdminProductRepository interface {
@@ -39,6 +42,11 @@ type AdminBatchRepository interface {
 
 type AdminMarkerRepository interface {
 	Create(ctx context.Context, markerCode, objectType string, objectID int64) (models.Marker, error)
+}
+
+type AdminUserRepository interface {
+	ListByRole(ctx context.Context, role string, limit int32) ([]models.User, error)
+	Create(ctx context.Context, login, email, fullName, role, passwordHash string) (models.User, error)
 }
 
 type CreateProductInput struct {
@@ -73,12 +81,20 @@ type CreateBatchInput struct {
 	StorageCellID *int64
 }
 
+type CreateWorkerInput struct {
+	Login    string
+	FullName string
+	Password string
+	Email    string
+}
+
 type AdminService struct {
 	productRepo     AdminProductRepository
 	storageCellRepo AdminStorageCellRepository
 	boxRepo         AdminBoxRepository
 	batchRepo       AdminBatchRepository
 	markerRepo      AdminMarkerRepository
+	userRepo        AdminUserRepository
 }
 
 func NewAdminService(
@@ -87,6 +103,7 @@ func NewAdminService(
 	boxRepo AdminBoxRepository,
 	batchRepo AdminBatchRepository,
 	markerRepo AdminMarkerRepository,
+	userRepo AdminUserRepository,
 ) *AdminService {
 	return &AdminService{
 		productRepo:     productRepo,
@@ -94,6 +111,7 @@ func NewAdminService(
 		boxRepo:         boxRepo,
 		batchRepo:       batchRepo,
 		markerRepo:      markerRepo,
+		userRepo:        userRepo,
 	}
 }
 
@@ -131,6 +149,24 @@ func (s *AdminService) ListBatches(ctx context.Context, limit int32) ([]models.B
 	}
 
 	return s.batchRepo.List(ctx, normalizedLimit)
+}
+
+func (s *AdminService) ListWorkers(ctx context.Context, limit int32) ([]models.User, error) {
+	normalizedLimit, err := normalizeLimit(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	users, err := s.userRepo.ListByRole(ctx, "worker", normalizedLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range users {
+		users[i] = sanitizeAdminUser(users[i])
+	}
+
+	return users, nil
 }
 
 func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInput) (models.Product, models.Marker, error) {
@@ -262,6 +298,36 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 	return batch, marker, nil
 }
 
+func (s *AdminService) CreateWorker(ctx context.Context, input CreateWorkerInput) (models.User, error) {
+	login := strings.TrimSpace(strings.ToLower(input.Login))
+	fullName := strings.TrimSpace(input.FullName)
+	password := strings.TrimSpace(input.Password)
+	email := strings.TrimSpace(strings.ToLower(input.Email))
+
+	if login == "" || fullName == "" || password == "" || len(password) < 6 {
+		return models.User{}, ErrInvalidAdminInput
+	}
+
+	if email == "" {
+		email = login + "@warehouse.local"
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return models.User{}, err
+	}
+
+	user, err := s.userRepo.Create(ctx, login, email, fullName, "worker", string(passwordHash))
+	if err != nil {
+		if errors.Is(err, repository.ErrConflict) {
+			return models.User{}, ErrAdminConflict
+		}
+		return models.User{}, err
+	}
+
+	return sanitizeAdminUser(user), nil
+}
+
 func buildMarkerCode(objectType string, objectID int64) string {
 	switch objectType {
 	case "storage_cell":
@@ -277,4 +343,9 @@ func buildMarkerCode(objectType string, objectID int64) string {
 	default:
 		return fmt.Sprintf("MRK-OBJECT-%03d", objectID)
 	}
+}
+
+func sanitizeAdminUser(user models.User) models.User {
+	user.PasswordHash = ""
+	return user
 }
