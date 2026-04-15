@@ -294,6 +294,40 @@ type createProductResponse struct {
 	MarkerCode string         `json:"marker_code"`
 }
 
+type createStorageCellRequest struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+	Zone string `json:"zone"`
+}
+
+type createStorageCellResponse struct {
+	StorageCell models.StorageCell `json:"storage_cell"`
+	MarkerCode  string             `json:"marker_code"`
+}
+
+type createBoxRequest struct {
+	Code          string `json:"code"`
+	StorageCellID *int64 `json:"storage_cell_id"`
+}
+
+type createBoxResponse struct {
+	Box        models.Box `json:"box"`
+	MarkerCode string     `json:"marker_code"`
+}
+
+type createBatchRequest struct {
+	Code          string `json:"code"`
+	ProductID     int64  `json:"product_id"`
+	Quantity      int32  `json:"quantity"`
+	BoxID         *int64 `json:"box_id"`
+	StorageCellID *int64 `json:"storage_cell_id"`
+}
+
+type createBatchResponse struct {
+	Batch      models.Batch `json:"batch"`
+	MarkerCode string       `json:"marker_code"`
+}
+
 func (h *AdminHandler) ListProductsAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -353,6 +387,194 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 
 	writeJSON(w, http.StatusCreated, createProductResponse{
 		Product:    product,
+		MarkerCode: marker.MarkerCode,
+	})
+}
+
+func (h *AdminHandler) ListStorageCellsAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var limit int32
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+			return
+		}
+		limit = int32(parsedLimit)
+	}
+
+	storageCells, err := h.adminUseCase.ListStorageCells(ctx, limit)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidLimit):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, storageCells)
+}
+
+func (h *AdminHandler) CreateStorageCellAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req createStorageCellRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	storageCell, marker, err := h.adminUseCase.CreateStorageCell(ctx, service.CreateStorageCellInput{
+		Code: req.Code,
+		Name: req.Name,
+		Zone: req.Zone,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, repository.ErrConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "ячейка с таким кодом уже существует"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, createStorageCellResponse{
+		StorageCell: storageCell,
+		MarkerCode:  marker.MarkerCode,
+	})
+}
+
+func (h *AdminHandler) ListBoxesAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var limit int32
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+			return
+		}
+		limit = int32(parsedLimit)
+	}
+
+	boxes, err := h.adminUseCase.ListBoxes(ctx, limit)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidLimit):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, boxes)
+}
+
+func (h *AdminHandler) CreateBoxAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req createBoxRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	box, marker, err := h.adminUseCase.CreateBox(ctx, service.CreateBoxInput{
+		Code:          req.Code,
+		StorageCellID: req.StorageCellID,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, repository.ErrConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "короб с таким кодом уже существует"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, createBoxResponse{
+		Box:        box,
+		MarkerCode: marker.MarkerCode,
+	})
+}
+
+func (h *AdminHandler) ListBatchesAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var limit int32
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+			return
+		}
+		limit = int32(parsedLimit)
+	}
+
+	batches, err := h.adminUseCase.ListBatches(ctx, limit)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidLimit):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, batches)
+}
+
+func (h *AdminHandler) CreateBatchAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req createBatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	batch, marker, err := h.adminUseCase.CreateBatch(ctx, service.CreateBatchInput{
+		Code:          req.Code,
+		ProductID:     req.ProductID,
+		Quantity:      req.Quantity,
+		BoxID:         req.BoxID,
+		StorageCellID: req.StorageCellID,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code, product_id and quantity are required"})
+		case errors.Is(err, service.ErrConflictingBatchTarget):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "выберите либо короб, либо ячейку"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "связанный объект не найден"})
+		case errors.Is(err, repository.ErrConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "партия с таким кодом уже существует"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, createBatchResponse{
+		Batch:      batch,
 		MarkerCode: marker.MarkerCode,
 	})
 }

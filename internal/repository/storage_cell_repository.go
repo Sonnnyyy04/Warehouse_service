@@ -7,6 +7,7 @@ import (
 
 	"Warehouse_service/internal/models"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -100,6 +101,10 @@ RETURNING id, code, name, zone, status
 		&cell.Zone,
 		&cell.Status,
 	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return models.StorageCell{}, ErrConflict
+		}
 		return models.StorageCell{}, fmt.Errorf("create storage cell: %w", err)
 	}
 

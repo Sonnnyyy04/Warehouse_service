@@ -22,6 +22,7 @@ var (
 
 type AdminProductRepository interface {
 	List(ctx context.Context, limit int32) ([]models.Product, error)
+	GetByID(ctx context.Context, id int64) (models.Product, error)
 	GetByName(ctx context.Context, name string) (models.Product, error)
 	Create(ctx context.Context, sku, name, unit string) (models.Product, error)
 	Update(ctx context.Context, id int64, sku, name, unit string) (models.Product, error)
@@ -29,11 +30,13 @@ type AdminProductRepository interface {
 
 type AdminStorageCellRepository interface {
 	List(ctx context.Context, limit int32) ([]models.StorageCell, error)
+	GetByID(ctx context.Context, id int64) (models.StorageCell, error)
 	Create(ctx context.Context, code, name string, zone *string, status string) (models.StorageCell, error)
 }
 
 type AdminBoxRepository interface {
 	List(ctx context.Context, limit int32) ([]models.Box, error)
+	GetByID(ctx context.Context, id int64) (models.Box, error)
 	Create(ctx context.Context, code, status string, storageCellID *int64) (models.Box, error)
 }
 
@@ -271,6 +274,15 @@ func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (mod
 		return models.Box{}, models.Marker{}, ErrInvalidAdminInput
 	}
 
+	if input.StorageCellID != nil {
+		if _, err := s.storageCellRepo.GetByID(ctx, *input.StorageCellID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return models.Box{}, models.Marker{}, ErrInvalidAdminReference
+			}
+			return models.Box{}, models.Marker{}, err
+		}
+	}
+
 	box, err := s.boxRepo.Create(ctx, code, "active", input.StorageCellID)
 	if err != nil {
 		return models.Box{}, models.Marker{}, err
@@ -292,6 +304,31 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 
 	if input.BoxID != nil && input.StorageCellID != nil {
 		return models.Batch{}, models.Marker{}, ErrConflictingBatchTarget
+	}
+
+	if _, err := s.productRepo.GetByID(ctx, input.ProductID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.Batch{}, models.Marker{}, ErrInvalidAdminReference
+		}
+		return models.Batch{}, models.Marker{}, err
+	}
+
+	if input.BoxID != nil {
+		if _, err := s.boxRepo.GetByID(ctx, *input.BoxID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return models.Batch{}, models.Marker{}, ErrInvalidAdminReference
+			}
+			return models.Batch{}, models.Marker{}, err
+		}
+	}
+
+	if input.StorageCellID != nil {
+		if _, err := s.storageCellRepo.GetByID(ctx, *input.StorageCellID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return models.Batch{}, models.Marker{}, ErrInvalidAdminReference
+			}
+			return models.Batch{}, models.Marker{}, err
+		}
 	}
 
 	batch, err := s.batchRepo.Create(

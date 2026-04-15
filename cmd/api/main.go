@@ -222,6 +222,39 @@ func main() {
 		}
 	}))
 
+	mux.HandleFunc("/api/v1/admin/storage-cells", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminHandler.ListStorageCellsAPI(w, r)
+		case http.MethodPost:
+			adminHandler.CreateStorageCellAPI(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/admin/boxes", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminHandler.ListBoxesAPI(w, r)
+		case http.MethodPost:
+			adminHandler.CreateBoxAPI(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/admin/batches", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminHandler.ListBatchesAPI(w, r)
+		case http.MethodPost:
+			adminHandler.CreateBatchAPI(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
 	mux.HandleFunc("/api/v1/labels/qr", authMiddleware.RequireAuthenticated(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

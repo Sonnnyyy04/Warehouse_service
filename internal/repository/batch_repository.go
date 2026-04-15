@@ -7,6 +7,7 @@ import (
 
 	"Warehouse_service/internal/models"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -128,6 +129,10 @@ RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cel
 		&batch.PalletID,
 		&batch.StorageCellID,
 	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return models.Batch{}, ErrConflict
+		}
 		return models.Batch{}, fmt.Errorf("create batch: %w", err)
 	}
 
