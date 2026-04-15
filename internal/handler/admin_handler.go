@@ -344,7 +344,7 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 		case errors.Is(err, service.ErrAdminProductExists):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "такой товар уже существует"})
 		case errors.Is(err, repository.ErrConflict), errors.Is(err, service.ErrAdminConflict):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "product sku already exists"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "товар с таким SKU уже существует"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
