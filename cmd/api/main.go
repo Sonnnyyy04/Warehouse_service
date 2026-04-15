@@ -211,6 +211,17 @@ func main() {
 		}
 	}))
 
+	mux.HandleFunc("/api/v1/admin/products", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminHandler.ListProductsAPI(w, r)
+		case http.MethodPost:
+			adminHandler.CreateProductAPI(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
 	mux.HandleFunc("/api/v1/labels/qr", authMiddleware.RequireAuthenticated(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

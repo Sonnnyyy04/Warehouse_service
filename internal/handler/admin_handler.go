@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"Warehouse_service/internal/models"
+	"Warehouse_service/internal/repository"
 	"Warehouse_service/internal/service"
 )
 
@@ -280,6 +281,78 @@ type createWorkerRequest struct {
 	FullName string `json:"full_name"`
 	Password string `json:"password"`
 	Email    string `json:"email"`
+}
+
+type createProductRequest struct {
+	SKU  string `json:"sku"`
+	Name string `json:"name"`
+	Unit string `json:"unit"`
+}
+
+type createProductResponse struct {
+	Product    models.Product `json:"product"`
+	MarkerCode string         `json:"marker_code"`
+}
+
+func (h *AdminHandler) ListProductsAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var limit int32
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+			return
+		}
+		limit = int32(parsedLimit)
+	}
+
+	products, err := h.adminUseCase.ListProducts(ctx, limit)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidLimit):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, products)
+}
+
+func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req createProductRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	product, marker, err := h.adminUseCase.CreateProduct(ctx, service.CreateProductInput{
+		SKU:  req.SKU,
+		Name: req.Name,
+		Unit: req.Unit,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sku and name are required"})
+		case errors.Is(err, repository.ErrConflict), errors.Is(err, service.ErrAdminConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "product sku already exists"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, createProductResponse{
+		Product:    product,
+		MarkerCode: marker.MarkerCode,
+	})
 }
 
 func (h *AdminHandler) ListWorkersAPI(w http.ResponseWriter, r *http.Request) {

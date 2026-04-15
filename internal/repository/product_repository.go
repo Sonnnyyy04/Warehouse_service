@@ -8,6 +8,7 @@ import (
 	"Warehouse_service/internal/models"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -97,6 +98,10 @@ RETURNING id, sku, name, unit
 		&product.Name,
 		&product.Unit,
 	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return models.Product{}, ErrConflict
+		}
 		return models.Product{}, fmt.Errorf("create product: %w", err)
 	}
 
