@@ -341,6 +341,8 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sku and name are required"})
+		case errors.Is(err, service.ErrAdminProductExists):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "такой товар уже существует"})
 		case errors.Is(err, repository.ErrConflict), errors.Is(err, service.ErrAdminConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "product sku already exists"})
 		default:

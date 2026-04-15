@@ -17,10 +17,12 @@ var (
 	ErrInvalidAdminReference  = errors.New("invalid admin reference")
 	ErrConflictingBatchTarget = errors.New("conflicting batch target")
 	ErrAdminConflict          = errors.New("admin conflict")
+	ErrAdminProductExists     = errors.New("admin product exists")
 )
 
 type AdminProductRepository interface {
 	List(ctx context.Context, limit int32) ([]models.Product, error)
+	GetByName(ctx context.Context, name string) (models.Product, error)
 	Create(ctx context.Context, sku, name, unit string) (models.Product, error)
 	Update(ctx context.Context, id int64, sku, name, unit string) (models.Product, error)
 }
@@ -181,6 +183,14 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 		return models.Product{}, models.Marker{}, ErrInvalidAdminInput
 	}
 
+	existingProduct, err := s.productRepo.GetByName(ctx, name)
+	if err == nil && existingProduct.ID > 0 {
+		return models.Product{}, models.Marker{}, ErrAdminProductExists
+	}
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return models.Product{}, models.Marker{}, err
+	}
+
 	product, err := s.productRepo.Create(ctx, sku, name, unit)
 	if err != nil {
 		return models.Product{}, models.Marker{}, err
@@ -204,6 +214,14 @@ func (s *AdminService) UpdateProduct(ctx context.Context, input UpdateProductInp
 
 	if input.ID <= 0 || sku == "" || name == "" {
 		return models.Product{}, ErrInvalidAdminInput
+	}
+
+	existingProduct, err := s.productRepo.GetByName(ctx, name)
+	if err == nil && existingProduct.ID != input.ID {
+		return models.Product{}, ErrAdminProductExists
+	}
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return models.Product{}, err
 	}
 
 	product, err := s.productRepo.Update(ctx, input.ID, sku, name, unit)

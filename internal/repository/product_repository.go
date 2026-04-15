@@ -22,9 +22,11 @@ func NewProductRepository(pool *pgxpool.Pool) *ProductRepository {
 
 func (r *ProductRepository) GetByID(ctx context.Context, id int64) (models.Product, error) {
 	const query = `
-SELECT id, sku, name, unit
-FROM products
-WHERE id = $1
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+FROM products p
+LEFT JOIN batches b ON b.product_id = p.id
+WHERE p.id = $1
+GROUP BY p.id, p.sku, p.name, p.unit
 `
 
 	var product models.Product
@@ -34,6 +36,7 @@ WHERE id = $1
 		&product.SKU,
 		&product.Name,
 		&product.Unit,
+		&product.TotalQuantity,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -45,11 +48,42 @@ WHERE id = $1
 	return product, nil
 }
 
+func (r *ProductRepository) GetByName(ctx context.Context, name string) (models.Product, error) {
+	const query = `
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+FROM products p
+LEFT JOIN batches b ON b.product_id = p.id
+WHERE LOWER(p.name) = LOWER($1)
+GROUP BY p.id, p.sku, p.name, p.unit
+LIMIT 1
+`
+
+	var product models.Product
+
+	err := r.pool.QueryRow(ctx, query, name).Scan(
+		&product.ID,
+		&product.SKU,
+		&product.Name,
+		&product.Unit,
+		&product.TotalQuantity,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Product{}, ErrNotFound
+		}
+		return models.Product{}, fmt.Errorf("get product by name: %w", err)
+	}
+
+	return product, nil
+}
+
 func (r *ProductRepository) List(ctx context.Context, limit int32) ([]models.Product, error) {
 	const query = `
-SELECT id, sku, name, unit
-FROM products
-ORDER BY id
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+FROM products p
+LEFT JOIN batches b ON b.product_id = p.id
+GROUP BY p.id, p.sku, p.name, p.unit
+ORDER BY p.id
 LIMIT $1
 `
 
@@ -69,6 +103,7 @@ LIMIT $1
 			&product.SKU,
 			&product.Name,
 			&product.Unit,
+			&product.TotalQuantity,
 		); err != nil {
 			return nil, fmt.Errorf("scan product row: %w", err)
 		}
@@ -87,7 +122,7 @@ func (r *ProductRepository) Create(ctx context.Context, sku, name, unit string) 
 	const query = `
 INSERT INTO products (sku, name, unit)
 VALUES ($1, $2, $3)
-RETURNING id, sku, name, unit
+RETURNING id, sku, name, unit, 0
 `
 
 	var product models.Product
@@ -97,6 +132,7 @@ RETURNING id, sku, name, unit
 		&product.SKU,
 		&product.Name,
 		&product.Unit,
+		&product.TotalQuantity,
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -110,12 +146,18 @@ RETURNING id, sku, name, unit
 
 func (r *ProductRepository) Update(ctx context.Context, id int64, sku, name, unit string) (models.Product, error) {
 	const query = `
-UPDATE products
-SET sku = $2,
-    name = $3,
-    unit = $4
-WHERE id = $1
-RETURNING id, sku, name, unit
+WITH updated AS (
+	UPDATE products
+	SET sku = $2,
+	    name = $3,
+	    unit = $4
+	WHERE id = $1
+	RETURNING id, sku, name, unit
+)
+SELECT u.id, u.sku, u.name, u.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+FROM updated u
+LEFT JOIN batches b ON b.product_id = u.id
+GROUP BY u.id, u.sku, u.name, u.unit
 `
 
 	var product models.Product
@@ -125,6 +167,7 @@ RETURNING id, sku, name, unit
 		&product.SKU,
 		&product.Name,
 		&product.Unit,
+		&product.TotalQuantity,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Product{}, ErrNotFound
