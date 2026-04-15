@@ -15,7 +15,7 @@ The backend is already implemented as an MVP and is the source of truth for:
 Your task in this repository is usually **not** to reinvent the backend, but to:
 - understand how it works,
 - preserve the current architecture,
-- make careful incremental changes when explicitly requested,
+- make careful incremental changes when explicitly requested,cvjn
 - keep the API stable for the mobile client.
 
 ---

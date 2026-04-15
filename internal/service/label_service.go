@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"strings"
@@ -18,6 +19,12 @@ var (
 	ErrInvalidLabelObjectType = errors.New("invalid label object type")
 	ErrInvalidLabelMarkerCode = errors.New("invalid label marker code")
 )
+
+//go:embed fonts/DejaVuSansCondensed.ttf
+var labelFontRegular []byte
+
+//go:embed fonts/DejaVuSansCondensed-Bold.ttf
+var labelFontBold []byte
 
 type LabelMarkerRepository interface {
 	List(ctx context.Context, objectType string, limit int32) ([]models.Marker, error)
@@ -159,6 +166,8 @@ func (s *LabelService) GenerateLabelsPDF(labels []models.Label) ([]byte, error) 
 	pdf.SetAuthor("Warehouse Service", false)
 	pdf.SetMargins(10, 10, 10)
 	pdf.SetAutoPageBreak(false, 10)
+	pdf.AddUTF8FontFromBytes("dejavu", "", bytes.Clone(labelFontRegular))
+	pdf.AddUTF8FontFromBytes("dejavu", "B", bytes.Clone(labelFontBold))
 
 	const (
 		columns     = 3
@@ -195,7 +204,7 @@ func (s *LabelService) GenerateLabelsPDF(labels []models.Label) ([]byte, error) 
 		pdf.RoundedRect(x, y, cardW, cardH, 4, "1234", "DF")
 
 		pdf.SetXY(x+8, y+topOffset)
-		pdf.SetFont("Arial", "B", 8)
+		pdf.SetFont("dejavu", "B", 8)
 		pdf.SetTextColor(107, 114, 128)
 		pdf.CellFormat(cardW-16, 4, strings.ToUpper(label.ObjectType), "", 0, "L", false, 0, "")
 
@@ -213,17 +222,17 @@ func (s *LabelService) GenerateLabelsPDF(labels []models.Label) ([]byte, error) 
 		pdf.ImageOptions(imageID, x+(cardW-qrSize)/2, y+16, qrSize, qrSize, false, options, 0, "")
 
 		pdf.SetXY(x+8, y+titleOffset)
-		pdf.SetFont("Arial", "B", 16)
+		pdf.SetFont("dejavu", "B", 16)
 		pdf.SetTextColor(31, 41, 55)
 		pdf.CellFormat(cardW-16, 8, label.Code, "", 0, "L", false, 0, "")
 
 		pdf.SetXY(x+8, y+nameOffset)
-		pdf.SetFont("Arial", "", 11)
+		pdf.SetFont("dejavu", "", 11)
 		pdf.SetTextColor(55, 65, 81)
 		pdf.MultiCell(cardW-16, 5, label.Name, "", "L", false)
 
 		pdf.SetXY(x+8, y+markerY)
-		pdf.SetFont("Arial", "", 9)
+		pdf.SetFont("dejavu", "", 9)
 		pdf.SetTextColor(107, 114, 128)
 		pdf.MultiCell(cardW-16, 4.5, label.MarkerCode, "", "L", false)
 	}
