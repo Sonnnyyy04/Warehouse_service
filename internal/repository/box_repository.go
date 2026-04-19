@@ -111,6 +111,39 @@ RETURNING id, code, status, pallet_id, storage_cell_id
 	return box, nil
 }
 
+func (r *BoxRepository) Update(ctx context.Context, id int64, code, status string, storageCellID *int64) (models.Box, error) {
+	const query = `
+UPDATE boxes
+SET code = $2,
+    status = $3,
+    pallet_id = NULL,
+    storage_cell_id = $4
+WHERE id = $1
+RETURNING id, code, status, pallet_id, storage_cell_id
+`
+
+	var box models.Box
+
+	if err := r.pool.QueryRow(ctx, query, id, code, status, storageCellID).Scan(
+		&box.ID,
+		&box.Code,
+		&box.Status,
+		&box.PalletID,
+		&box.StorageCellID,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return models.Box{}, ErrConflict
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Box{}, ErrNotFound
+		}
+		return models.Box{}, fmt.Errorf("update box: %w", err)
+	}
+
+	return box, nil
+}
+
 func (r *BoxRepository) MoveToStorageCell(ctx context.Context, boxID, storageCellID int64) error {
 	cmd, err := r.pool.Exec(ctx, `
 		UPDATE boxes

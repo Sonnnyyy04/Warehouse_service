@@ -24,8 +24,11 @@ type AdminUseCase interface {
 	CreateProduct(ctx context.Context, input service.CreateProductInput) (models.Product, models.Marker, error)
 	UpdateProduct(ctx context.Context, input service.UpdateProductInput) (models.Product, error)
 	CreateStorageCell(ctx context.Context, input service.CreateStorageCellInput) (models.StorageCell, models.Marker, error)
+	UpdateStorageCell(ctx context.Context, input service.UpdateStorageCellInput) (models.StorageCell, error)
 	CreateBox(ctx context.Context, input service.CreateBoxInput) (models.Box, models.Marker, error)
+	UpdateBox(ctx context.Context, input service.UpdateBoxInput) (models.Box, error)
 	CreateBatch(ctx context.Context, input service.CreateBatchInput) (models.Batch, models.Marker, error)
+	UpdateBatch(ctx context.Context, input service.UpdateBatchInput) (models.Batch, error)
 	CreateWorker(ctx context.Context, input service.CreateWorkerInput) (models.User, error)
 }
 
@@ -305,6 +308,20 @@ type createStorageCellResponse struct {
 	MarkerCode  string             `json:"marker_code"`
 }
 
+type updateProductRequest struct {
+	ID   int64  `json:"id"`
+	SKU  string `json:"sku"`
+	Name string `json:"name"`
+	Unit string `json:"unit"`
+}
+
+type updateStorageCellRequest struct {
+	ID   int64  `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+	Zone string `json:"zone"`
+}
+
 type createBoxRequest struct {
 	Code          string `json:"code"`
 	StorageCellID *int64 `json:"storage_cell_id"`
@@ -313,6 +330,12 @@ type createBoxRequest struct {
 type createBoxResponse struct {
 	Box        models.Box `json:"box"`
 	MarkerCode string     `json:"marker_code"`
+}
+
+type updateBoxRequest struct {
+	ID            int64  `json:"id"`
+	Code          string `json:"code"`
+	StorageCellID *int64 `json:"storage_cell_id"`
 }
 
 type createBatchRequest struct {
@@ -326,6 +349,15 @@ type createBatchRequest struct {
 type createBatchResponse struct {
 	Batch      models.Batch `json:"batch"`
 	MarkerCode string       `json:"marker_code"`
+}
+
+type updateBatchRequest struct {
+	ID            int64  `json:"id"`
+	Code          string `json:"code"`
+	ProductID     int64  `json:"product_id"`
+	Quantity      int32  `json:"quantity"`
+	BoxID         *int64 `json:"box_id"`
+	StorageCellID *int64 `json:"storage_cell_id"`
 }
 
 func (h *AdminHandler) ListProductsAPI(w http.ResponseWriter, r *http.Request) {
@@ -391,6 +423,41 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+func (h *AdminHandler) UpdateProductAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req updateProductRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	product, err := h.adminUseCase.UpdateProduct(ctx, service.UpdateProductInput{
+		ID:   req.ID,
+		SKU:  req.SKU,
+		Name: req.Name,
+		Unit: req.Unit,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sku and name are required"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "товар не найден"})
+		case errors.Is(err, service.ErrAdminProductExists):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "такой товар уже существует"})
+		case errors.Is(err, repository.ErrConflict), errors.Is(err, service.ErrAdminConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "товар с таким SKU уже существует"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, product)
+}
+
 func (h *AdminHandler) ListStorageCellsAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -452,6 +519,39 @@ func (h *AdminHandler) CreateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+func (h *AdminHandler) UpdateStorageCellAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req updateStorageCellRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	storageCell, err := h.adminUseCase.UpdateStorageCell(ctx, service.UpdateStorageCellInput{
+		ID:   req.ID,
+		Code: req.Code,
+		Name: req.Name,
+		Zone: req.Zone,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ячейка не найдена"})
+		case errors.Is(err, repository.ErrConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "ячейка с таким кодом уже существует"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, storageCell)
+}
+
 func (h *AdminHandler) ListBoxesAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -510,6 +610,38 @@ func (h *AdminHandler) CreateBoxAPI(w http.ResponseWriter, r *http.Request) {
 		Box:        box,
 		MarkerCode: marker.MarkerCode,
 	})
+}
+
+func (h *AdminHandler) UpdateBoxAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req updateBoxRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	box, err := h.adminUseCase.UpdateBox(ctx, service.UpdateBoxInput{
+		ID:            req.ID,
+		Code:          req.Code,
+		StorageCellID: req.StorageCellID,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "связанный объект не найден"})
+		case errors.Is(err, repository.ErrConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "короб с таким кодом уже существует"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, box)
 }
 
 func (h *AdminHandler) ListBatchesAPI(w http.ResponseWriter, r *http.Request) {
@@ -577,6 +709,43 @@ func (h *AdminHandler) CreateBatchAPI(w http.ResponseWriter, r *http.Request) {
 		Batch:      batch,
 		MarkerCode: marker.MarkerCode,
 	})
+}
+
+func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req updateBatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	batch, err := h.adminUseCase.UpdateBatch(ctx, service.UpdateBatchInput{
+		ID:            req.ID,
+		Code:          req.Code,
+		ProductID:     req.ProductID,
+		Quantity:      req.Quantity,
+		BoxID:         req.BoxID,
+		StorageCellID: req.StorageCellID,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code, product_id and quantity are required"})
+		case errors.Is(err, service.ErrConflictingBatchTarget):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "выберите либо короб, либо ячейку"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "связанный объект не найден"})
+		case errors.Is(err, repository.ErrConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "партия с таким кодом уже существует"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, batch)
 }
 
 func (h *AdminHandler) ListWorkersAPI(w http.ResponseWriter, r *http.Request) {

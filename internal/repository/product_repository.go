@@ -169,6 +169,10 @@ GROUP BY u.id, u.sku, u.name, u.unit
 		&product.Unit,
 		&product.TotalQuantity,
 	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return models.Product{}, ErrConflict
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Product{}, ErrNotFound
 		}

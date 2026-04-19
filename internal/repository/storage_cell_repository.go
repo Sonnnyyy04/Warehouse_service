@@ -110,3 +110,36 @@ RETURNING id, code, name, zone, status
 
 	return cell, nil
 }
+
+func (r *StorageCellRepository) Update(ctx context.Context, id int64, code, name string, zone *string, status string) (models.StorageCell, error) {
+	const query = `
+UPDATE storage_cells
+SET code = $2,
+    name = $3,
+    zone = $4,
+    status = $5
+WHERE id = $1
+RETURNING id, code, name, zone, status
+`
+
+	var cell models.StorageCell
+
+	if err := r.pool.QueryRow(ctx, query, id, code, name, zone, status).Scan(
+		&cell.ID,
+		&cell.Code,
+		&cell.Name,
+		&cell.Zone,
+		&cell.Status,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return models.StorageCell{}, ErrConflict
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.StorageCell{}, ErrNotFound
+		}
+		return models.StorageCell{}, fmt.Errorf("update storage cell: %w", err)
+	}
+
+	return cell, nil
+}

@@ -22,7 +22,7 @@ Your task in this repository is usually **not** to reinvent the backend, but to:
 
 ## Project summary
 
-The system operates on warehouse entities:
+The system operates on warehouse entities:ghb
 - storage cells,
 - pallets,
 - boxes,

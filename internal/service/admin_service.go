@@ -32,17 +32,21 @@ type AdminStorageCellRepository interface {
 	List(ctx context.Context, limit int32) ([]models.StorageCell, error)
 	GetByID(ctx context.Context, id int64) (models.StorageCell, error)
 	Create(ctx context.Context, code, name string, zone *string, status string) (models.StorageCell, error)
+	Update(ctx context.Context, id int64, code, name string, zone *string, status string) (models.StorageCell, error)
 }
 
 type AdminBoxRepository interface {
 	List(ctx context.Context, limit int32) ([]models.Box, error)
 	GetByID(ctx context.Context, id int64) (models.Box, error)
 	Create(ctx context.Context, code, status string, storageCellID *int64) (models.Box, error)
+	Update(ctx context.Context, id int64, code, status string, storageCellID *int64) (models.Box, error)
 }
 
 type AdminBatchRepository interface {
 	List(ctx context.Context, limit int32) ([]models.Batch, error)
+	GetByID(ctx context.Context, id int64) (models.Batch, error)
 	Create(ctx context.Context, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
+	Update(ctx context.Context, id int64, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
 }
 
 type AdminMarkerRepository interface {
@@ -78,7 +82,29 @@ type CreateBoxInput struct {
 	StorageCellID *int64
 }
 
+type UpdateStorageCellInput struct {
+	ID   int64
+	Code string
+	Name string
+	Zone string
+}
+
+type UpdateBoxInput struct {
+	ID            int64
+	Code          string
+	StorageCellID *int64
+}
+
 type CreateBatchInput struct {
+	Code          string
+	ProductID     int64
+	Quantity      int32
+	BoxID         *int64
+	StorageCellID *int64
+}
+
+type UpdateBatchInput struct {
+	ID            int64
 	Code          string
 	ProductID     int64
 	Quantity      int32
@@ -268,6 +294,34 @@ func (s *AdminService) CreateStorageCell(ctx context.Context, input CreateStorag
 	return cell, marker, nil
 }
 
+func (s *AdminService) UpdateStorageCell(ctx context.Context, input UpdateStorageCellInput) (models.StorageCell, error) {
+	code := strings.TrimSpace(input.Code)
+	name := strings.TrimSpace(input.Name)
+	zone := strings.TrimSpace(input.Zone)
+	if name == "" {
+		name = code
+	}
+
+	if input.ID <= 0 || code == "" {
+		return models.StorageCell{}, ErrInvalidAdminInput
+	}
+
+	var zoneValue *string
+	if zone != "" {
+		zoneValue = &zone
+	}
+
+	cell, err := s.storageCellRepo.Update(ctx, input.ID, code, name, zoneValue, "active")
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.StorageCell{}, ErrInvalidAdminReference
+		}
+		return models.StorageCell{}, err
+	}
+
+	return cell, nil
+}
+
 func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (models.Box, models.Marker, error) {
 	code := strings.TrimSpace(input.Code)
 	if code == "" {
@@ -294,6 +348,32 @@ func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (mod
 	}
 
 	return box, marker, nil
+}
+
+func (s *AdminService) UpdateBox(ctx context.Context, input UpdateBoxInput) (models.Box, error) {
+	code := strings.TrimSpace(input.Code)
+	if input.ID <= 0 || code == "" {
+		return models.Box{}, ErrInvalidAdminInput
+	}
+
+	if input.StorageCellID != nil {
+		if _, err := s.storageCellRepo.GetByID(ctx, *input.StorageCellID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return models.Box{}, ErrInvalidAdminReference
+			}
+			return models.Box{}, err
+		}
+	}
+
+	box, err := s.boxRepo.Update(ctx, input.ID, code, "active", input.StorageCellID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.Box{}, ErrInvalidAdminReference
+		}
+		return models.Box{}, err
+	}
+
+	return box, nil
 }
 
 func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) (models.Batch, models.Marker, error) {
@@ -351,6 +431,69 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 	}
 
 	return batch, marker, nil
+}
+
+func (s *AdminService) UpdateBatch(ctx context.Context, input UpdateBatchInput) (models.Batch, error) {
+	code := strings.TrimSpace(input.Code)
+	if input.ID <= 0 || code == "" || input.ProductID <= 0 || input.Quantity <= 0 {
+		return models.Batch{}, ErrInvalidAdminInput
+	}
+
+	if input.BoxID != nil && input.StorageCellID != nil {
+		return models.Batch{}, ErrConflictingBatchTarget
+	}
+
+	if _, err := s.batchRepo.GetByID(ctx, input.ID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.Batch{}, ErrInvalidAdminReference
+		}
+		return models.Batch{}, err
+	}
+
+	if _, err := s.productRepo.GetByID(ctx, input.ProductID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.Batch{}, ErrInvalidAdminReference
+		}
+		return models.Batch{}, err
+	}
+
+	if input.BoxID != nil {
+		if _, err := s.boxRepo.GetByID(ctx, *input.BoxID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return models.Batch{}, ErrInvalidAdminReference
+			}
+			return models.Batch{}, err
+		}
+	}
+
+	if input.StorageCellID != nil {
+		if _, err := s.storageCellRepo.GetByID(ctx, *input.StorageCellID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return models.Batch{}, ErrInvalidAdminReference
+			}
+			return models.Batch{}, err
+		}
+	}
+
+	batch, err := s.batchRepo.Update(
+		ctx,
+		input.ID,
+		code,
+		input.ProductID,
+		input.Quantity,
+		"active",
+		input.BoxID,
+		nil,
+		input.StorageCellID,
+	)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.Batch{}, ErrInvalidAdminReference
+		}
+		return models.Batch{}, err
+	}
+
+	return batch, nil
 }
 
 func (s *AdminService) CreateWorker(ctx context.Context, input CreateWorkerInput) (models.User, error) {

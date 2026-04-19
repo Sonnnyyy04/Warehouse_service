@@ -217,6 +217,8 @@ func main() {
 			adminHandler.ListProductsAPI(w, r)
 		case http.MethodPost:
 			adminHandler.CreateProductAPI(w, r)
+		case http.MethodPut:
+			adminHandler.UpdateProductAPI(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -228,6 +230,8 @@ func main() {
 			adminHandler.ListStorageCellsAPI(w, r)
 		case http.MethodPost:
 			adminHandler.CreateStorageCellAPI(w, r)
+		case http.MethodPut:
+			adminHandler.UpdateStorageCellAPI(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -239,6 +243,8 @@ func main() {
 			adminHandler.ListBoxesAPI(w, r)
 		case http.MethodPost:
 			adminHandler.CreateBoxAPI(w, r)
+		case http.MethodPut:
+			adminHandler.UpdateBoxAPI(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -250,6 +256,8 @@ func main() {
 			adminHandler.ListBatchesAPI(w, r)
 		case http.MethodPost:
 			adminHandler.CreateBatchAPI(w, r)
+		case http.MethodPut:
+			adminHandler.UpdateBatchAPI(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

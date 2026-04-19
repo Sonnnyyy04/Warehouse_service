@@ -138,3 +138,63 @@ RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cel
 
 	return batch, nil
 }
+
+func (r *BatchRepository) Update(
+	ctx context.Context,
+	id int64,
+	code string,
+	productID int64,
+	quantity int32,
+	status string,
+	boxID *int64,
+	palletID *int64,
+	storageCellID *int64,
+) (models.Batch, error) {
+	const query = `
+UPDATE batches
+SET code = $2,
+    product_id = $3,
+    quantity = $4,
+    status = $5,
+    box_id = $6,
+    pallet_id = $7,
+    storage_cell_id = $8
+WHERE id = $1
+RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cell_id
+`
+
+	var batch models.Batch
+
+	if err := r.pool.QueryRow(
+		ctx,
+		query,
+		id,
+		code,
+		productID,
+		quantity,
+		status,
+		boxID,
+		palletID,
+		storageCellID,
+	).Scan(
+		&batch.ID,
+		&batch.Code,
+		&batch.ProductID,
+		&batch.Quantity,
+		&batch.Status,
+		&batch.BoxID,
+		&batch.PalletID,
+		&batch.StorageCellID,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return models.Batch{}, ErrConflict
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Batch{}, ErrNotFound
+		}
+		return models.Batch{}, fmt.Errorf("update batch: %w", err)
+	}
+
+	return batch, nil
+}
