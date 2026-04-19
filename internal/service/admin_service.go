@@ -384,7 +384,7 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 		return models.Batch{}, models.Marker{}, ErrInvalidAdminInput
 	}
 
-	if input.BoxID != nil && input.StorageCellID != nil {
+	if !hasSingleBatchTarget(input.BoxID, input.StorageCellID) {
 		return models.Batch{}, models.Marker{}, ErrConflictingBatchTarget
 	}
 
@@ -449,7 +449,7 @@ func (s *AdminService) UpdateBatch(ctx context.Context, input UpdateBatchInput) 
 		return models.Batch{}, ErrInvalidAdminInput
 	}
 
-	if input.BoxID != nil && input.StorageCellID != nil {
+	if !hasSingleBatchTarget(input.BoxID, input.StorageCellID) {
 		return models.Batch{}, ErrConflictingBatchTarget
 	}
 
@@ -565,4 +565,8 @@ func buildMarkerCode(objectType string, objectID int64) string {
 func sanitizeAdminUser(user models.User) models.User {
 	user.PasswordHash = ""
 	return user
+}
+
+func hasSingleBatchTarget(boxID *int64, storageCellID *int64) bool {
+	return (boxID == nil) != (storageCellID == nil)
 }

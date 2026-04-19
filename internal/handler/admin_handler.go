@@ -116,10 +116,10 @@ func (h *AdminHandler) Page(w http.ResponseWriter, r *http.Request) {
 		Batches:      batches,
 		Labels:       labels,
 		Types: []adminObjectType{
-			{Value: "box", Label: "Короба"},
-			{Value: "storage_cell", Label: "Ячейки"},
-			{Value: "batch", Label: "Партии"},
-			{Value: "product", Label: "Товары"},
+			{Value: "box", Label: "РљРѕСЂРѕР±Р°"},
+			{Value: "storage_cell", Label: "РЇС‡РµР№РєРё"},
+			{Value: "batch", Label: "РџР°СЂС‚РёРё"},
+			{Value: "product", Label: "РўРѕРІР°СЂС‹"},
 		},
 	}
 
@@ -150,7 +150,7 @@ func (h *AdminHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.redirectWithNotice(w, r, "product", "Товар "+product.SKU+" создан, QR: "+marker.MarkerCode)
+	h.redirectWithNotice(w, r, "product", "РўРѕРІР°СЂ "+product.SKU+" СЃРѕР·РґР°РЅ, QR: "+marker.MarkerCode)
 }
 
 func (h *AdminHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +179,7 @@ func (h *AdminHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.redirectWithNotice(w, r, "product", "Товар "+product.SKU+" обновлён")
+	h.redirectWithNotice(w, r, "product", "РўРѕРІР°СЂ "+product.SKU+" РѕР±РЅРѕРІР»С‘РЅ")
 }
 
 func (h *AdminHandler) CreateStorageCell(w http.ResponseWriter, r *http.Request) {
@@ -201,7 +201,7 @@ func (h *AdminHandler) CreateStorageCell(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	h.redirectWithNotice(w, r, "storage_cell", "Ячейка "+cell.Code+" создана, QR: "+marker.MarkerCode)
+	h.redirectWithNotice(w, r, "storage_cell", "РЇС‡РµР№РєР° "+cell.Code+" СЃРѕР·РґР°РЅР°, QR: "+marker.MarkerCode)
 }
 
 func (h *AdminHandler) CreateBox(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +228,7 @@ func (h *AdminHandler) CreateBox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.redirectWithNotice(w, r, "box", "Короб "+box.Code+" создан, QR: "+marker.MarkerCode)
+	h.redirectWithNotice(w, r, "box", "РљРѕСЂРѕР± "+box.Code+" СЃРѕР·РґР°РЅ, QR: "+marker.MarkerCode)
 }
 
 func (h *AdminHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
@@ -276,7 +276,7 @@ func (h *AdminHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.redirectWithNotice(w, r, "batch", "Партия "+batch.Code+" создана, QR: "+marker.MarkerCode)
+	h.redirectWithNotice(w, r, "batch", "РџР°СЂС‚РёСЏ "+batch.Code+" СЃРѕР·РґР°РЅР°, QR: "+marker.MarkerCode)
 }
 
 type createWorkerRequest struct {
@@ -408,9 +408,9 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sku and name are required"})
 		case errors.Is(err, service.ErrAdminProductExists):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "такой товар уже существует"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "С‚Р°РєРѕР№ С‚РѕРІР°СЂ СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		case errors.Is(err, repository.ErrConflict), errors.Is(err, service.ErrAdminConflict):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "товар с таким SKU уже существует"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "С‚РѕРІР°СЂ СЃ С‚Р°РєРёРј SKU СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
@@ -443,14 +443,12 @@ func (h *AdminHandler) UpdateProductAPI(w http.ResponseWriter, r *http.Request) 
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sku and name are required"})
-		case errors.Is(err, service.ErrMixedBoxProducts):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "товар не найден"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "С‚РѕРІР°СЂ РЅРµ РЅР°Р№РґРµРЅ"})
 		case errors.Is(err, service.ErrAdminProductExists):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "такой товар уже существует"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "С‚Р°РєРѕР№ С‚РѕРІР°СЂ СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		case errors.Is(err, repository.ErrConflict), errors.Is(err, service.ErrAdminConflict):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "товар с таким SKU уже существует"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "С‚РѕРІР°СЂ СЃ С‚Р°РєРёРј SKU СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
@@ -459,7 +457,6 @@ func (h *AdminHandler) UpdateProductAPI(w http.ResponseWriter, r *http.Request) 
 
 	writeJSON(w, http.StatusOK, product)
 }
-
 func (h *AdminHandler) ListStorageCellsAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -508,7 +505,7 @@ func (h *AdminHandler) CreateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
 		case errors.Is(err, repository.ErrConflict):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "ячейка с таким кодом уже существует"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "СЏС‡РµР№РєР° СЃ С‚Р°РєРёРј РєРѕРґРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
@@ -541,12 +538,10 @@ func (h *AdminHandler) UpdateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
-		case errors.Is(err, service.ErrMixedBoxProducts):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ячейка не найдена"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "СЏС‡РµР№РєР° РЅРµ РЅР°Р№РґРµРЅР°"})
 		case errors.Is(err, repository.ErrConflict):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "ячейка с таким кодом уже существует"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "СЏС‡РµР№РєР° СЃ С‚Р°РєРёРј РєРѕРґРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
@@ -555,7 +550,6 @@ func (h *AdminHandler) UpdateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 
 	writeJSON(w, http.StatusOK, storageCell)
 }
-
 func (h *AdminHandler) ListBoxesAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -603,7 +597,7 @@ func (h *AdminHandler) CreateBoxAPI(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
 		case errors.Is(err, repository.ErrConflict):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "короб с таким кодом уже существует"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "РєРѕСЂРѕР± СЃ С‚Р°РєРёРј РєРѕРґРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
@@ -636,9 +630,9 @@ func (h *AdminHandler) UpdateBoxAPI(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "связанный объект не найден"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "СЃРІСЏР·Р°РЅРЅС‹Р№ РѕР±СЉРµРєС‚ РЅРµ РЅР°Р№РґРµРЅ"})
 		case errors.Is(err, repository.ErrConflict):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "короб с таким кодом уже существует"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "РєРѕСЂРѕР± СЃ С‚Р°РєРёРј РєРѕРґРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
@@ -698,11 +692,13 @@ func (h *AdminHandler) CreateBatchAPI(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code, product_id and quantity are required"})
 		case errors.Is(err, service.ErrConflictingBatchTarget):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "выберите либо короб, либо ячейку"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "РІС‹Р±РµСЂРёС‚Рµ Р»РёР±Рѕ РєРѕСЂРѕР±, Р»РёР±Рѕ СЏС‡РµР№РєСѓ"})
+		case errors.Is(err, service.ErrMixedBoxProducts):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "связанный объект не найден"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "СЃРІСЏР·Р°РЅРЅС‹Р№ РѕР±СЉРµРєС‚ РЅРµ РЅР°Р№РґРµРЅ"})
 		case errors.Is(err, repository.ErrConflict):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "партия с таким кодом уже существует"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "РїР°СЂС‚РёСЏ СЃ С‚Р°РєРёРј РєРѕРґРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
@@ -714,7 +710,6 @@ func (h *AdminHandler) CreateBatchAPI(w http.ResponseWriter, r *http.Request) {
 		MarkerCode: marker.MarkerCode,
 	})
 }
-
 func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -738,11 +733,13 @@ func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code, product_id and quantity are required"})
 		case errors.Is(err, service.ErrConflictingBatchTarget):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "выберите либо короб, либо ячейку"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "РІС‹Р±РµСЂРёС‚Рµ Р»РёР±Рѕ РєРѕСЂРѕР±, Р»РёР±Рѕ СЏС‡РµР№РєСѓ"})
+		case errors.Is(err, service.ErrMixedBoxProducts):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "связанный объект не найден"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "СЃРІСЏР·Р°РЅРЅС‹Р№ РѕР±СЉРµРєС‚ РЅРµ РЅР°Р№РґРµРЅ"})
 		case errors.Is(err, repository.ErrConflict):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "партия с таким кодом уже существует"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "РїР°СЂС‚РёСЏ СЃ С‚Р°РєРёРј РєРѕРґРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
@@ -751,7 +748,6 @@ func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, batch)
 }
-
 func (h *AdminHandler) ListWorkersAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -814,15 +810,15 @@ func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) redirectWithAdminError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, service.ErrInvalidAdminInput):
-		h.redirectWithError(w, r, "", "заполните обязательные поля")
+		h.redirectWithError(w, r, "", "Р·Р°РїРѕР»РЅРёС‚Рµ РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рµ РїРѕР»СЏ")
 	case errors.Is(err, service.ErrMixedBoxProducts):
-		h.redirectWithError(w, r, "", "В одном коробе можно хранить только один товар")
+		h.redirectWithError(w, r, "", "Р’ РѕРґРЅРѕРј РєРѕСЂРѕР±Рµ РјРѕР¶РЅРѕ С…СЂР°РЅРёС‚СЊ С‚РѕР»СЊРєРѕ РѕРґРёРЅ С‚РѕРІР°СЂ")
 	case errors.Is(err, service.ErrInvalidAdminReference):
-		h.redirectWithError(w, r, "", "ссылка на объект не найдена")
+		h.redirectWithError(w, r, "", "СЃСЃС‹Р»РєР° РЅР° РѕР±СЉРµРєС‚ РЅРµ РЅР°Р№РґРµРЅР°")
 	case errors.Is(err, service.ErrConflictingBatchTarget):
-		h.redirectWithError(w, r, "", "укажите либо короб, либо ячейку для партии")
+		h.redirectWithError(w, r, "", "СѓРєР°Р¶РёС‚Рµ Р»РёР±Рѕ РєРѕСЂРѕР±, Р»РёР±Рѕ СЏС‡РµР№РєСѓ РґР»СЏ РїР°СЂС‚РёРё")
 	default:
-		h.redirectWithError(w, r, "", "операция не выполнена")
+		h.redirectWithError(w, r, "", "РѕРїРµСЂР°С†РёСЏ РЅРµ РІС‹РїРѕР»РЅРµРЅР°")
 	}
 }
 
@@ -1065,8 +1061,8 @@ const adminTemplate = `<!DOCTYPE html>
 <body>
   <main class="page">
     <section class="hero">
-      <h1>Админ-панель склада</h1>
-      <p class="subtitle">Здесь администратор вручную заводит товары и складские объекты, получает marker_code для новых записей и печатает QR-коды только для выбранных объектов.</p>
+      <h1>РђРґРјРёРЅ-РїР°РЅРµР»СЊ СЃРєР»Р°РґР°</h1>
+      <p class="subtitle">Р—РґРµСЃСЊ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ РІСЂСѓС‡РЅСѓСЋ Р·Р°РІРѕРґРёС‚ С‚РѕРІР°СЂС‹ Рё СЃРєР»Р°РґСЃРєРёРµ РѕР±СЉРµРєС‚С‹, РїРѕР»СѓС‡Р°РµС‚ marker_code РґР»СЏ РЅРѕРІС‹С… Р·Р°РїРёСЃРµР№ Рё РїРµС‡Р°С‚Р°РµС‚ QR-РєРѕРґС‹ С‚РѕР»СЊРєРѕ РґР»СЏ РІС‹Р±СЂР°РЅРЅС‹С… РѕР±СЉРµРєС‚РѕРІ.</p>
     </section>
 
     {{if .Notice}}<div class="flash notice">{{.Notice}}</div>{{end}}
@@ -1074,100 +1070,100 @@ const adminTemplate = `<!DOCTYPE html>
 
     <section class="grid">
       <article class="panel span-4">
-        <h2>Новый товар</h2>
-        <p class="muted">Товар можно завести в систему вручную до поступления на склад. Для новой записи сразу создаётся marker_code.</p>
+        <h2>РќРѕРІС‹Р№ С‚РѕРІР°СЂ</h2>
+        <p class="muted">РўРѕРІР°СЂ РјРѕР¶РЅРѕ Р·Р°РІРµСЃС‚Рё РІ СЃРёСЃС‚РµРјСѓ РІСЂСѓС‡РЅСѓСЋ РґРѕ РїРѕСЃС‚СѓРїР»РµРЅРёСЏ РЅР° СЃРєР»Р°Рґ. Р”Р»СЏ РЅРѕРІРѕР№ Р·Р°РїРёСЃРё СЃСЂР°Р·Сѓ СЃРѕР·РґР°С‘С‚СЃСЏ marker_code.</p>
         <form action="/admin/products" method="post">
           <label for="product-sku">SKU</label>
           <input id="product-sku" name="sku" placeholder="SKU-001" required />
-          <label for="product-name">Название</label>
-          <input id="product-name" name="name" placeholder="Например, Ноутбук 14" required />
-          <label for="product-unit">Единица</label>
+          <label for="product-name">РќР°Р·РІР°РЅРёРµ</label>
+          <input id="product-name" name="name" placeholder="РќР°РїСЂРёРјРµСЂ, РќРѕСѓС‚Р±СѓРє 14" required />
+          <label for="product-unit">Р•РґРёРЅРёС†Р°</label>
           <input id="product-unit" name="unit" value="pcs" />
           <div class="actions">
-            <button class="button" type="submit">Создать товар</button>
+            <button class="button" type="submit">РЎРѕР·РґР°С‚СЊ С‚РѕРІР°СЂ</button>
           </div>
         </form>
       </article>
 
       <article class="panel span-4">
-        <h2>Новая ячейка</h2>
-        <p class="muted">Ячейка создаётся вручную, после чего ей сразу присваивается QR-маркер для расклейки на стеллаж или место хранения.</p>
+        <h2>РќРѕРІР°СЏ СЏС‡РµР№РєР°</h2>
+        <p class="muted">РЇС‡РµР№РєР° СЃРѕР·РґР°С‘С‚СЃСЏ РІСЂСѓС‡РЅСѓСЋ, РїРѕСЃР»Рµ С‡РµРіРѕ РµР№ СЃСЂР°Р·Сѓ РїСЂРёСЃРІР°РёРІР°РµС‚СЃСЏ QR-РјР°СЂРєРµСЂ РґР»СЏ СЂР°СЃРєР»РµР№РєРё РЅР° СЃС‚РµР»Р»Р°Р¶ РёР»Рё РјРµСЃС‚Рѕ С…СЂР°РЅРµРЅРёСЏ.</p>
         <form action="/admin/storage-cells" method="post">
-          <label for="cell-code">Код ячейки</label>
+          <label for="cell-code">РљРѕРґ СЏС‡РµР№РєРё</label>
           <input id="cell-code" name="code" placeholder="A-01-01" required />
-          <label for="cell-name">Название</label>
-          <input id="cell-name" name="name" placeholder="Стеллаж A / Полка 1 / Ячейка 1" />
-          <label for="cell-zone">Зона</label>
+          <label for="cell-name">РќР°Р·РІР°РЅРёРµ</label>
+          <input id="cell-name" name="name" placeholder="РЎС‚РµР»Р»Р°Р¶ A / РџРѕР»РєР° 1 / РЇС‡РµР№РєР° 1" />
+          <label for="cell-zone">Р—РѕРЅР°</label>
           <input id="cell-zone" name="zone" placeholder="A" />
           <div class="actions">
-            <button class="button" type="submit">Создать ячейку</button>
+            <button class="button" type="submit">РЎРѕР·РґР°С‚СЊ СЏС‡РµР№РєСѓ</button>
           </div>
         </form>
       </article>
 
       <article class="panel span-4">
-        <h2>Новый короб</h2>
-        <p class="muted">Короб создаётся как физическая единица хранения. Можно сразу привязать его к ячейке.</p>
+        <h2>РќРѕРІС‹Р№ РєРѕСЂРѕР±</h2>
+        <p class="muted">РљРѕСЂРѕР± СЃРѕР·РґР°С‘С‚СЃСЏ РєР°Рє С„РёР·РёС‡РµСЃРєР°СЏ РµРґРёРЅРёС†Р° С…СЂР°РЅРµРЅРёСЏ. РњРѕР¶РЅРѕ СЃСЂР°Р·Сѓ РїСЂРёРІСЏР·Р°С‚СЊ РµРіРѕ Рє СЏС‡РµР№РєРµ.</p>
         <form action="/admin/boxes" method="post">
-          <label for="box-code">Код короба</label>
+          <label for="box-code">РљРѕРґ РєРѕСЂРѕР±Р°</label>
           <input id="box-code" name="code" placeholder="BOX-101" required />
-          <label for="box-cell">Ячейка</label>
+          <label for="box-cell">РЇС‡РµР№РєР°</label>
           <select id="box-cell" name="storage_cell_id">
-            <option value="">Без ячейки</option>
+            <option value="">Р‘РµР· СЏС‡РµР№РєРё</option>
             {{range .StorageCells}}
             <option value="{{.ID}}">{{.Code}} {{if .Name}}- {{.Name}}{{end}}</option>
             {{end}}
           </select>
           <div class="actions">
-            <button class="button" type="submit">Создать короб</button>
+            <button class="button" type="submit">РЎРѕР·РґР°С‚СЊ РєРѕСЂРѕР±</button>
           </div>
         </form>
       </article>
 
       <article class="panel span-6">
-        <h2>Новая партия</h2>
-        <p class="muted">Партия привязывается к товару. При необходимости можно сразу поместить её в короб или в ячейку.</p>
+        <h2>РќРѕРІР°СЏ РїР°СЂС‚РёСЏ</h2>
+        <p class="muted">РџР°СЂС‚РёСЏ РїСЂРёРІСЏР·С‹РІР°РµС‚СЃСЏ Рє С‚РѕРІР°СЂСѓ. РџСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё РјРѕР¶РЅРѕ СЃСЂР°Р·Сѓ РїРѕРјРµСЃС‚РёС‚СЊ РµС‘ РІ РєРѕСЂРѕР± РёР»Рё РІ СЏС‡РµР№РєСѓ.</p>
         <form action="/admin/batches" method="post">
-          <label for="batch-code">Код партии</label>
+          <label for="batch-code">РљРѕРґ РїР°СЂС‚РёРё</label>
           <input id="batch-code" name="code" placeholder="BATCH-2026-001" required />
-          <label for="batch-product">Товар</label>
+          <label for="batch-product">РўРѕРІР°СЂ</label>
           <select id="batch-product" name="product_id" required>
-            <option value="">Выберите товар</option>
+            <option value="">Р’С‹Р±РµСЂРёС‚Рµ С‚РѕРІР°СЂ</option>
             {{range .Products}}
             <option value="{{.ID}}">{{.SKU}} - {{.Name}}</option>
             {{end}}
           </select>
-          <label for="batch-quantity">Количество</label>
+          <label for="batch-quantity">РљРѕР»РёС‡РµСЃС‚РІРѕ</label>
           <input id="batch-quantity" type="number" min="1" name="quantity" value="1" required />
-          <label for="batch-box">Короб</label>
+          <label for="batch-box">РљРѕСЂРѕР±</label>
           <select id="batch-box" name="box_id">
-            <option value="">Без короба</option>
+            <option value="">Р‘РµР· РєРѕСЂРѕР±Р°</option>
             {{range .Boxes}}
             <option value="{{.ID}}">{{.Code}}</option>
             {{end}}
           </select>
-          <label for="batch-cell">Ячейка</label>
+          <label for="batch-cell">РЇС‡РµР№РєР°</label>
           <select id="batch-cell" name="storage_cell_id">
-            <option value="">Без ячейки</option>
+            <option value="">Р‘РµР· СЏС‡РµР№РєРё</option>
             {{range .StorageCells}}
             <option value="{{.ID}}">{{.Code}}</option>
             {{end}}
           </select>
-          <p class="hint">Для партии укажите либо короб, либо ячейку, либо оставьте оба поля пустыми.</p>
+          <p class="hint">Р”Р»СЏ РїР°СЂС‚РёРё СѓРєР°Р¶РёС‚Рµ Р»РёР±Рѕ РєРѕСЂРѕР±, Р»РёР±Рѕ СЏС‡РµР№РєСѓ, Р»РёР±Рѕ РѕСЃС‚Р°РІСЊС‚Рµ РѕР±Р° РїРѕР»СЏ РїСѓСЃС‚С‹РјРё.</p>
           <div class="actions">
-            <button class="button" type="submit">Создать партию</button>
+            <button class="button" type="submit">РЎРѕР·РґР°С‚СЊ РїР°СЂС‚РёСЋ</button>
           </div>
         </form>
       </article>
 
       <article class="panel span-6">
-        <h2>Товары в системе</h2>
-        <p class="muted">Редактирование каталога доступно прямо на этой странице. Marker_code товара остаётся прежним.</p>
+        <h2>РўРѕРІР°СЂС‹ РІ СЃРёСЃС‚РµРјРµ</h2>
+        <p class="muted">Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ РєР°С‚Р°Р»РѕРіР° РґРѕСЃС‚СѓРїРЅРѕ РїСЂСЏРјРѕ РЅР° СЌС‚РѕР№ СЃС‚СЂР°РЅРёС†Рµ. Marker_code С‚РѕРІР°СЂР° РѕСЃС‚Р°С‘С‚СЃСЏ РїСЂРµР¶РЅРёРј.</p>
         <table class="table">
           <thead>
             <tr>
               <th>ID</th>
-              <th>SKU / Название / Unit</th>
+              <th>SKU / РќР°Р·РІР°РЅРёРµ / Unit</th>
               <th></th>
             </tr>
           </thead>
@@ -1181,7 +1177,7 @@ const adminTemplate = `<!DOCTYPE html>
                   <input name="sku" value="{{.SKU}}" required />
                   <input name="name" value="{{.Name}}" required />
                   <input name="unit" value="{{.Unit}}" required />
-                  <button class="button-secondary" type="submit">Сохранить</button>
+                  <button class="button-secondary" type="submit">РЎРѕС…СЂР°РЅРёС‚СЊ</button>
                 </form>
               </td>
             </tr>
@@ -1191,8 +1187,8 @@ const adminTemplate = `<!DOCTYPE html>
       </article>
 
       <article class="panel span-12">
-        <h2>Печать конкретных объектов</h2>
-        <p class="muted">Выберите тип, отметьте нужные объекты и сформируйте HTML-печать или PDF только для выбранных marker_code.</p>
+        <h2>РџРµС‡Р°С‚СЊ РєРѕРЅРєСЂРµС‚РЅС‹С… РѕР±СЉРµРєС‚РѕРІ</h2>
+        <p class="muted">Р’С‹Р±РµСЂРёС‚Рµ С‚РёРї, РѕС‚РјРµС‚СЊС‚Рµ РЅСѓР¶РЅС‹Рµ РѕР±СЉРµРєС‚С‹ Рё СЃС„РѕСЂРјРёСЂСѓР№С‚Рµ HTML-РїРµС‡Р°С‚СЊ РёР»Рё PDF С‚РѕР»СЊРєРѕ РґР»СЏ РІС‹Р±СЂР°РЅРЅС‹С… marker_code.</p>
 
         <form action="/admin" method="get">
           <div class="actions">
@@ -1202,7 +1198,7 @@ const adminTemplate = `<!DOCTYPE html>
               {{end}}
             </select>
             <input type="number" name="limit" min="1" max="200" value="{{.Limit}}" style="max-width: 160px;" />
-            <button class="button-secondary" type="submit">Обновить список</button>
+            <button class="button-secondary" type="submit">РћР±РЅРѕРІРёС‚СЊ СЃРїРёСЃРѕРє</button>
           </div>
         </form>
 
@@ -1211,8 +1207,8 @@ const adminTemplate = `<!DOCTYPE html>
           <input type="hidden" name="limit" value="{{.Limit}}" />
 
           <div class="actions">
-            <button class="button" type="submit" formaction="/labels/print">Открыть HTML-печать</button>
-            <button class="button-secondary" type="submit" formaction="/labels/pdf">Скачать PDF</button>
+            <button class="button" type="submit" formaction="/labels/print">РћС‚РєСЂС‹С‚СЊ HTML-РїРµС‡Р°С‚СЊ</button>
+            <button class="button-secondary" type="submit" formaction="/labels/pdf">РЎРєР°С‡Р°С‚СЊ PDF</button>
           </div>
 
           <div class="labels-list">
@@ -1229,7 +1225,7 @@ const adminTemplate = `<!DOCTYPE html>
             {{end}}
           </div>
 
-          <p class="hint">Если ничего не отмечать, печать и PDF будут сформированы для всего текущего списка по выбранному типу.</p>
+          <p class="hint">Р•СЃР»Рё РЅРёС‡РµРіРѕ РЅРµ РѕС‚РјРµС‡Р°С‚СЊ, РїРµС‡Р°С‚СЊ Рё PDF Р±СѓРґСѓС‚ СЃС„РѕСЂРјРёСЂРѕРІР°РЅС‹ РґР»СЏ РІСЃРµРіРѕ С‚РµРєСѓС‰РµРіРѕ СЃРїРёСЃРєР° РїРѕ РІС‹Р±СЂР°РЅРЅРѕРјСѓ С‚РёРїСѓ.</p>
         </form>
       </article>
     </section>
