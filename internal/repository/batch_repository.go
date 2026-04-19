@@ -7,8 +7,8 @@ import (
 
 	"Warehouse_service/internal/models"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -89,6 +89,30 @@ LIMIT $1
 	}
 
 	return batches, nil
+}
+
+func (r *BatchRepository) HasOtherProductInBox(
+	ctx context.Context,
+	boxID int64,
+	productID int64,
+	excludeBatchID *int64,
+) (bool, error) {
+	const query = `
+SELECT EXISTS (
+    SELECT 1
+    FROM batches
+    WHERE box_id = $1
+      AND product_id <> $2
+      AND ($3::BIGINT IS NULL OR id <> $3)
+)
+`
+
+	var exists bool
+	if err := r.pool.QueryRow(ctx, query, boxID, productID, excludeBatchID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check box product compatibility: %w", err)
+	}
+
+	return exists, nil
 }
 
 func (r *BatchRepository) Create(

@@ -443,6 +443,8 @@ func (h *AdminHandler) UpdateProductAPI(w http.ResponseWriter, r *http.Request) 
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sku and name are required"})
+		case errors.Is(err, service.ErrMixedBoxProducts):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "товар не найден"})
 		case errors.Is(err, service.ErrAdminProductExists):
@@ -539,6 +541,8 @@ func (h *AdminHandler) UpdateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrMixedBoxProducts):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ячейка не найдена"})
 		case errors.Is(err, repository.ErrConflict):
@@ -811,6 +815,8 @@ func (h *AdminHandler) redirectWithAdminError(w http.ResponseWriter, r *http.Req
 	switch {
 	case errors.Is(err, service.ErrInvalidAdminInput):
 		h.redirectWithError(w, r, "", "заполните обязательные поля")
+	case errors.Is(err, service.ErrMixedBoxProducts):
+		h.redirectWithError(w, r, "", "В одном коробе можно хранить только один товар")
 	case errors.Is(err, service.ErrInvalidAdminReference):
 		h.redirectWithError(w, r, "", "ссылка на объект не найдена")
 	case errors.Is(err, service.ErrConflictingBatchTarget):

@@ -16,6 +16,7 @@ var (
 	ErrInvalidAdminInput      = errors.New("invalid admin input")
 	ErrInvalidAdminReference  = errors.New("invalid admin reference")
 	ErrConflictingBatchTarget = errors.New("conflicting batch target")
+	ErrMixedBoxProducts       = errors.New("mixed box products")
 	ErrAdminConflict          = errors.New("admin conflict")
 	ErrAdminProductExists     = errors.New("admin product exists")
 )
@@ -45,6 +46,7 @@ type AdminBoxRepository interface {
 type AdminBatchRepository interface {
 	List(ctx context.Context, limit int32) ([]models.Batch, error)
 	GetByID(ctx context.Context, id int64) (models.Batch, error)
+	HasOtherProductInBox(ctx context.Context, boxID int64, productID int64, excludeBatchID *int64) (bool, error)
 	Create(ctx context.Context, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
 	Update(ctx context.Context, id int64, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
 }
@@ -400,6 +402,14 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 			}
 			return models.Batch{}, models.Marker{}, err
 		}
+
+		hasMixedProducts, err := s.batchRepo.HasOtherProductInBox(ctx, *input.BoxID, input.ProductID, nil)
+		if err != nil {
+			return models.Batch{}, models.Marker{}, err
+		}
+		if hasMixedProducts {
+			return models.Batch{}, models.Marker{}, ErrMixedBoxProducts
+		}
 	}
 
 	if input.StorageCellID != nil {
@@ -443,7 +453,8 @@ func (s *AdminService) UpdateBatch(ctx context.Context, input UpdateBatchInput) 
 		return models.Batch{}, ErrConflictingBatchTarget
 	}
 
-	if _, err := s.batchRepo.GetByID(ctx, input.ID); err != nil {
+	currentBatch, err := s.batchRepo.GetByID(ctx, input.ID)
+	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.Batch{}, ErrInvalidAdminReference
 		}
@@ -463,6 +474,14 @@ func (s *AdminService) UpdateBatch(ctx context.Context, input UpdateBatchInput) 
 				return models.Batch{}, ErrInvalidAdminReference
 			}
 			return models.Batch{}, err
+		}
+
+		hasMixedProducts, err := s.batchRepo.HasOtherProductInBox(ctx, *input.BoxID, input.ProductID, &currentBatch.ID)
+		if err != nil {
+			return models.Batch{}, err
+		}
+		if hasMixedProducts {
+			return models.Batch{}, ErrMixedBoxProducts
 		}
 	}
 
