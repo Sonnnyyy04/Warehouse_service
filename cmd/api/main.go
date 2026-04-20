@@ -83,12 +83,20 @@ func main() {
 		storageCellRepo,
 		operationHistoryService,
 	)
+	moveBatchService := service.NewMoveBatchService(
+		markerRepo,
+		batchRepo,
+		boxRepo,
+		storageCellRepo,
+		operationHistoryService,
+	)
 
 	objectHandler := handler.NewObjectHandler(objectService)
 	scanEventHandler := handler.NewScanEventHandler(scanEventService)
 	operationHistoryHandler := handler.NewOperationHistoryHandler(operationHistoryService)
 	scanHandler := handler.NewScanHandler(scanService)
 	moveBoxHandler := handler.NewMoveBoxHandler(moveBoxService)
+	moveBatchHandler := handler.NewMoveBatchHandler(moveBatchService)
 	labelHandler := handler.NewLabelHandler(labelService)
 	authHandler := handler.NewAuthHandler(authService)
 	adminHandler := handler.NewAdminHandler(adminService, labelService)
@@ -153,6 +161,15 @@ func main() {
 		switch r.Method {
 		case http.MethodPost:
 			moveBoxHandler.Execute(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/batches/move", authMiddleware.RequireAuthenticated(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			moveBatchHandler.Execute(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

@@ -115,6 +115,44 @@ SELECT EXISTS (
 	return exists, nil
 }
 
+func (r *BatchRepository) MoveToBox(ctx context.Context, batchID, boxID int64) error {
+	cmd, err := r.pool.Exec(ctx, `
+		UPDATE batches
+		SET box_id = $2,
+		    pallet_id = NULL,
+		    storage_cell_id = NULL
+		WHERE id = $1
+	`, batchID, boxID)
+	if err != nil {
+		return fmt.Errorf("move batch to box: %w", err)
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *BatchRepository) MoveToStorageCell(ctx context.Context, batchID, storageCellID int64) error {
+	cmd, err := r.pool.Exec(ctx, `
+		UPDATE batches
+		SET box_id = NULL,
+		    pallet_id = NULL,
+		    storage_cell_id = $2
+		WHERE id = $1
+	`, batchID, storageCellID)
+	if err != nil {
+		return fmt.Errorf("move batch to storage cell: %w", err)
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
 func (r *BatchRepository) Create(
 	ctx context.Context,
 	code string,
