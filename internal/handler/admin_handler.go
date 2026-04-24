@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -22,6 +23,7 @@ type AdminUseCase interface {
 	ListBatches(ctx context.Context, limit int32) ([]models.Batch, error)
 	ListWorkers(ctx context.Context, limit int32) ([]models.User, error)
 	CreateProduct(ctx context.Context, input service.CreateProductInput) (models.Product, models.Marker, error)
+	ImportProducts(ctx context.Context, reader io.Reader) (models.ProductImportResult, error)
 	UpdateProduct(ctx context.Context, input service.UpdateProductInput) (models.Product, error)
 	CreateStorageCell(ctx context.Context, input service.CreateStorageCellInput) (models.StorageCell, models.Marker, error)
 	UpdateStorageCell(ctx context.Context, input service.UpdateStorageCellInput) (models.StorageCell, error)
@@ -421,6 +423,38 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 		Product:    product,
 		MarkerCode: marker.MarkerCode,
 	})
+}
+
+func (h *AdminHandler) ImportProductsAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid multipart form"})
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file is required"})
+		return
+	}
+	defer file.Close()
+
+	result, err := h.adminUseCase.ImportProducts(ctx, file)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminImport):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid excel file"})
+		case errors.Is(err, service.ErrEmptyAdminImport):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "excel file contains no products"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *AdminHandler) UpdateProductAPI(w http.ResponseWriter, r *http.Request) {

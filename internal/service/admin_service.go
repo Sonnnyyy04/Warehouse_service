@@ -14,6 +14,8 @@ import (
 
 var (
 	ErrInvalidAdminInput      = errors.New("invalid admin input")
+	ErrInvalidAdminImport     = errors.New("invalid admin import")
+	ErrEmptyAdminImport       = errors.New("empty admin import")
 	ErrInvalidAdminReference  = errors.New("invalid admin reference")
 	ErrConflictingBatchTarget = errors.New("conflicting batch target")
 	ErrMixedBoxProducts       = errors.New("mixed box products")
