@@ -14,7 +14,7 @@ import (
 
 type OperationHistoryUseCase interface {
 	Create(ctx context.Context, input service.CreateOperationInput) (models.OperationHistory, error)
-	List(ctx context.Context, limit int32) ([]models.OperationHistory, error)
+	List(ctx context.Context, filter models.OperationHistoryFilter) ([]models.OperationHistory, error)
 }
 
 type OperationHistoryHandler struct {
@@ -94,7 +94,15 @@ func (h *OperationHistoryHandler) List(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	var limit int32
+	authUser, ok := userFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	filter := models.OperationHistoryFilter{}
 	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
 		parsedLimit, err := strconv.Atoi(rawLimit)
 		if err != nil {
@@ -103,15 +111,51 @@ func (h *OperationHistoryHandler) List(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		limit = int32(parsedLimit)
+		filter.Limit = int32(parsedLimit)
 	}
 
-	operations, err := h.useCase.List(ctx, limit)
+	if rawUserID := r.URL.Query().Get("user_id"); rawUserID != "" {
+		parsedUserID, err := strconv.ParseInt(rawUserID, 10, 64)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "invalid user_id",
+			})
+			return
+		}
+		filter.UserID = &parsedUserID
+	}
+
+	filter.ObjectType = r.URL.Query().Get("object_type")
+
+	if rawObjectID := r.URL.Query().Get("object_id"); rawObjectID != "" {
+		parsedObjectID, err := strconv.ParseInt(rawObjectID, 10, 64)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "invalid object_id",
+			})
+			return
+		}
+		filter.ObjectID = &parsedObjectID
+	}
+
+	if authUser.Role != "admin" {
+		if filter.ObjectType == "" && filter.ObjectID == nil {
+			filter.UserID = &authUser.ID
+		} else {
+			filter.UserID = nil
+		}
+	}
+
+	operations, err := h.useCase.List(ctx, filter)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidLimit):
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error": "invalid limit",
+			})
+		case errors.Is(err, service.ErrInvalidOperationHistoryFilter):
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "invalid operation history filter",
 			})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{

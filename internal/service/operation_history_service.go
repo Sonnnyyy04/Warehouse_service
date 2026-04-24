@@ -10,6 +10,7 @@ import (
 )
 
 var ErrInvalidOperation = errors.New("invalid operation")
+var ErrInvalidOperationHistoryFilter = errors.New("invalid operation history filter")
 
 type OperationHistoryRepository interface {
 	Create(
@@ -21,7 +22,7 @@ type OperationHistoryRepository interface {
 		details []byte,
 	) (models.OperationHistory, error)
 
-	List(ctx context.Context, limit int32) ([]models.OperationHistory, error)
+	List(ctx context.Context, filter models.OperationHistoryFilter) ([]models.OperationHistory, error)
 }
 
 type CreateOperationInput struct {
@@ -62,13 +63,24 @@ func (s *OperationHistoryService) Create(ctx context.Context, input CreateOperat
 	return s.repo.Create(ctx, objectType, input.ObjectID, operationType, input.UserID, details)
 }
 
-func (s *OperationHistoryService) List(ctx context.Context, limit int32) ([]models.OperationHistory, error) {
-	normalizedLimit, err := normalizeLimit(limit)
+func (s *OperationHistoryService) List(ctx context.Context, filter models.OperationHistoryFilter) ([]models.OperationHistory, error) {
+	normalizedLimit, err := normalizeLimit(filter.Limit)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.repo.List(ctx, normalizedLimit)
+	filter.Limit = normalizedLimit
+	filter.ObjectType = strings.TrimSpace(filter.ObjectType)
+
+	if (filter.ObjectID == nil) != (filter.ObjectType == "") {
+		return nil, ErrInvalidOperationHistoryFilter
+	}
+
+	if filter.ObjectType != "" && !isValidObjectType(filter.ObjectType) {
+		return nil, ErrInvalidOperationHistoryFilter
+	}
+
+	return s.repo.List(ctx, filter)
 }
 
 func isValidObjectType(objectType string) bool {

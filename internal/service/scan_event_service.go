@@ -9,6 +9,7 @@ import (
 )
 
 var ErrInvalidScanEvent = errors.New("invalid scan event")
+var ErrInvalidScanEventFilter = errors.New("invalid scan event filter")
 
 type ScanEventRepository interface {
 	Create(
@@ -19,7 +20,7 @@ type ScanEventRepository interface {
 		success bool,
 	) (models.ScanEvent, error)
 
-	List(ctx context.Context, limit int32) ([]models.ScanEvent, error)
+	List(ctx context.Context, filter models.ScanEventFilter) ([]models.ScanEvent, error)
 }
 
 type CreateScanEventInput struct {
@@ -51,11 +52,14 @@ func (s *ScanEventService) Create(ctx context.Context, input CreateScanEventInpu
 	return s.repo.Create(ctx, markerCode, input.UserID, input.DeviceInfo, success)
 }
 
-func (s *ScanEventService) List(ctx context.Context, limit int32) ([]models.ScanEvent, error) {
-	normalizedLimit, err := normalizeLimit(limit)
+func (s *ScanEventService) List(ctx context.Context, filter models.ScanEventFilter) ([]models.ScanEvent, error) {
+	normalizedLimit, err := normalizeLimit(filter.Limit)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.repo.List(ctx, normalizedLimit)
+	filter.Limit = normalizedLimit
+	filter.MarkerCode = strings.TrimSpace(filter.MarkerCode)
+
+	return s.repo.List(ctx, filter)
 }

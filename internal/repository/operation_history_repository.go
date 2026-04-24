@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"Warehouse_service/internal/models"
 
@@ -61,15 +62,50 @@ RETURNING id, object_type::text, object_id, operation_type, user_id, details, cr
 	return operation, nil
 }
 
-func (r *OperationHistoryRepository) List(ctx context.Context, limit int32) ([]models.OperationHistory, error) {
-	const query = `
-SELECT id, object_type::text, object_id, operation_type, user_id, details, created_at
-FROM operation_history
-ORDER BY created_at DESC, id DESC
-LIMIT $1
+func (r *OperationHistoryRepository) List(
+	ctx context.Context,
+	filter models.OperationHistoryFilter,
+) ([]models.OperationHistory, error) {
+	query := `
+SELECT
+    oh.id,
+    oh.object_type::text,
+    oh.object_id,
+    oh.operation_type,
+    oh.user_id,
+    oh.details,
+    oh.created_at,
+    u.id,
+    u.login,
+    u.full_name,
+    u.role
+FROM operation_history oh
+LEFT JOIN users u ON u.id = oh.user_id
 `
 
-	rows, err := r.pool.Query(ctx, query, limit)
+	args := make([]any, 0, 4)
+	conditions := make([]string, 0, 3)
+
+	if filter.UserID != nil {
+		args = append(args, *filter.UserID)
+		conditions = append(conditions, fmt.Sprintf("oh.user_id = $%d", len(args)))
+	}
+
+	if filter.ObjectID != nil {
+		args = append(args, filter.ObjectType)
+		conditions = append(conditions, fmt.Sprintf("oh.object_type = $%d", len(args)))
+		args = append(args, *filter.ObjectID)
+		conditions = append(conditions, fmt.Sprintf("oh.object_id = $%d", len(args)))
+	}
+
+	if len(conditions) > 0 {
+		query += "WHERE " + strings.Join(conditions, " AND ") + "\n"
+	}
+
+	args = append(args, filter.Limit)
+	query += fmt.Sprintf("ORDER BY oh.created_at DESC, oh.id DESC\nLIMIT $%d\n", len(args))
+
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list operation history: %w", err)
 	}
@@ -81,6 +117,10 @@ LIMIT $1
 		var operation models.OperationHistory
 		var dbUserID sql.NullInt64
 		var dbDetails []byte
+		var actorID sql.NullInt64
+		var actorLogin sql.NullString
+		var actorFullName sql.NullString
+		var actorRole sql.NullString
 
 		if err := rows.Scan(
 			&operation.ID,
@@ -90,6 +130,10 @@ LIMIT $1
 			&dbUserID,
 			&dbDetails,
 			&operation.CreatedAt,
+			&actorID,
+			&actorLogin,
+			&actorFullName,
+			&actorRole,
 		); err != nil {
 			return nil, fmt.Errorf("scan operation history row: %w", err)
 		}
@@ -100,6 +144,14 @@ LIMIT $1
 		if dbDetails != nil {
 			raw := json.RawMessage(dbDetails)
 			operation.Details = &raw
+		}
+		if actorID.Valid {
+			operation.Actor = &models.UserSummary{
+				ID:       actorID.Int64,
+				Login:    actorLogin.String,
+				FullName: actorFullName.String,
+				Role:     actorRole.String,
+			}
 		}
 
 		operations = append(operations, operation)

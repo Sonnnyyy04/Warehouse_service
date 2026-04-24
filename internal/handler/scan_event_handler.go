@@ -14,7 +14,7 @@ import (
 
 type ScanEventUseCase interface {
 	Create(ctx context.Context, input service.CreateScanEventInput) (models.ScanEvent, error)
-	List(ctx context.Context, limit int32) ([]models.ScanEvent, error)
+	List(ctx context.Context, filter models.ScanEventFilter) ([]models.ScanEvent, error)
 }
 
 type ScanEventHandler struct {
@@ -92,7 +92,15 @@ func (h *ScanEventHandler) List(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	var limit int32
+	authUser, ok := userFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	filter := models.ScanEventFilter{}
 	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
 		parsedLimit, err := strconv.Atoi(rawLimit)
 		if err != nil {
@@ -101,10 +109,31 @@ func (h *ScanEventHandler) List(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		limit = int32(parsedLimit)
+		filter.Limit = int32(parsedLimit)
 	}
 
-	events, err := h.useCase.List(ctx, limit)
+	if rawUserID := r.URL.Query().Get("user_id"); rawUserID != "" {
+		parsedUserID, err := strconv.ParseInt(rawUserID, 10, 64)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "invalid user_id",
+			})
+			return
+		}
+		filter.UserID = &parsedUserID
+	}
+
+	filter.MarkerCode = r.URL.Query().Get("marker_code")
+
+	if authUser.Role != "admin" {
+		if filter.MarkerCode == "" {
+			filter.UserID = &authUser.ID
+		} else {
+			filter.UserID = nil
+		}
+	}
+
+	events, err := h.useCase.List(ctx, filter)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidLimit):

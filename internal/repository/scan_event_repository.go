@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"Warehouse_service/internal/models"
 
@@ -57,15 +58,47 @@ RETURNING id, marker_code, user_id, device_info, success, scanned_at
 	return event, nil
 }
 
-func (r *ScanEventRepository) List(ctx context.Context, limit int32) ([]models.ScanEvent, error) {
-	const query = `
-SELECT id, marker_code, user_id, device_info, success, scanned_at
-FROM scan_events
-ORDER BY scanned_at DESC, id DESC
-LIMIT $1
+func (r *ScanEventRepository) List(
+	ctx context.Context,
+	filter models.ScanEventFilter,
+) ([]models.ScanEvent, error) {
+	query := `
+SELECT
+    se.id,
+    se.marker_code,
+    se.user_id,
+    se.device_info,
+    se.success,
+    se.scanned_at,
+    u.id,
+    u.login,
+    u.full_name,
+    u.role
+FROM scan_events se
+LEFT JOIN users u ON u.id = se.user_id
 `
 
-	rows, err := r.pool.Query(ctx, query, limit)
+	args := make([]any, 0, 3)
+	conditions := make([]string, 0, 2)
+
+	if filter.UserID != nil {
+		args = append(args, *filter.UserID)
+		conditions = append(conditions, fmt.Sprintf("se.user_id = $%d", len(args)))
+	}
+
+	if filter.MarkerCode != "" {
+		args = append(args, filter.MarkerCode)
+		conditions = append(conditions, fmt.Sprintf("se.marker_code = $%d", len(args)))
+	}
+
+	if len(conditions) > 0 {
+		query += "WHERE " + strings.Join(conditions, " AND ") + "\n"
+	}
+
+	args = append(args, filter.Limit)
+	query += fmt.Sprintf("ORDER BY se.scanned_at DESC, se.id DESC\nLIMIT $%d\n", len(args))
+
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list scan events: %w", err)
 	}
@@ -77,6 +110,10 @@ LIMIT $1
 		var event models.ScanEvent
 		var dbUserID sql.NullInt64
 		var dbDeviceInfo sql.NullString
+		var actorID sql.NullInt64
+		var actorLogin sql.NullString
+		var actorFullName sql.NullString
+		var actorRole sql.NullString
 
 		if err := rows.Scan(
 			&event.ID,
@@ -85,6 +122,10 @@ LIMIT $1
 			&dbDeviceInfo,
 			&event.Success,
 			&event.ScannedAt,
+			&actorID,
+			&actorLogin,
+			&actorFullName,
+			&actorRole,
 		); err != nil {
 			return nil, fmt.Errorf("scan scan event row: %w", err)
 		}
@@ -94,6 +135,14 @@ LIMIT $1
 		}
 		if dbDeviceInfo.Valid {
 			event.DeviceInfo = &dbDeviceInfo.String
+		}
+		if actorID.Valid {
+			event.Actor = &models.UserSummary{
+				ID:       actorID.Int64,
+				Login:    actorLogin.String,
+				FullName: actorFullName.String,
+				Role:     actorRole.String,
+			}
 		}
 
 		events = append(events, event)
