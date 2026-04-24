@@ -45,6 +45,14 @@ func (h *ScanHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
+	authUser, ok := userFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "unauthorized",
+		})
+		return
+	}
+
 	var req ScanRequest
 
 	decoder := json.NewDecoder(r.Body)
@@ -59,7 +67,7 @@ func (h *ScanHandler) Execute(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.useCase.Execute(ctx, service.ScanObjectInput{
 		MarkerCode: req.MarkerCode,
-		UserID:     req.UserID,
+		UserID:     &authUser.ID,
 		DeviceInfo: req.DeviceInfo,
 	})
 	if err != nil {

@@ -32,6 +32,14 @@ func (h *MoveBatchHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
+	authUser, ok := userFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "unauthorized",
+		})
+		return
+	}
+
 	var req MoveBatchRequest
 
 	decoder := json.NewDecoder(r.Body)
@@ -47,7 +55,7 @@ func (h *MoveBatchHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	result, err := h.useCase.Execute(ctx, service.MoveBatchInput{
 		BatchMarkerCode:  req.BatchMarkerCode,
 		TargetMarkerCode: req.TargetMarkerCode,
-		UserID:           req.UserID,
+		UserID:           &authUser.ID,
 	})
 	if err != nil {
 		switch {

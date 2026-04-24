@@ -47,6 +47,14 @@ func (h *ScanEventHandler) Create(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
+	authUser, ok := userFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "unauthorized",
+		})
+		return
+	}
+
 	var req CreateScanEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -57,7 +65,7 @@ func (h *ScanEventHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	event, err := h.useCase.Create(ctx, service.CreateScanEventInput{
 		MarkerCode: req.MarkerCode,
-		UserID:     req.UserID,
+		UserID:     &authUser.ID,
 		DeviceInfo: req.DeviceInfo,
 		Success:    req.Success,
 	})

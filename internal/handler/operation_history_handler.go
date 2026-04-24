@@ -48,6 +48,14 @@ func (h *OperationHistoryHandler) Create(w http.ResponseWriter, r *http.Request)
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
+	authUser, ok := userFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "unauthorized",
+		})
+		return
+	}
+
 	var req CreateOperationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -60,7 +68,7 @@ func (h *OperationHistoryHandler) Create(w http.ResponseWriter, r *http.Request)
 		ObjectType:    req.ObjectType,
 		ObjectID:      req.ObjectID,
 		OperationType: req.OperationType,
-		UserID:        req.UserID,
+		UserID:        &authUser.ID,
 		Details:       req.Details,
 	})
 	if err != nil {
