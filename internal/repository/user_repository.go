@@ -73,17 +73,21 @@ WHERE id = $1
 }
 
 func (r *UserRepository) ListByRole(ctx context.Context, role string, limit int32) ([]models.User, error) {
+	return r.ListByRoles(ctx, []string{role}, limit)
+}
+
+func (r *UserRepository) ListByRoles(ctx context.Context, roles []string, limit int32) ([]models.User, error) {
 	const query = `
 SELECT id, login, email, full_name, role, password_hash
 FROM users
-WHERE role = $1
-ORDER BY id
+WHERE role = ANY($1)
+ORDER BY role, full_name, id
 LIMIT $2
 `
 
-	rows, err := r.pool.Query(ctx, query, role, limit)
+	rows, err := r.pool.Query(ctx, query, roles, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list users by role: %w", err)
+		return nil, fmt.Errorf("list users by roles: %w", err)
 	}
 	defer rows.Close()
 

@@ -65,6 +65,7 @@ type AdminMarkerRepository interface {
 
 type AdminUserRepository interface {
 	ListByRole(ctx context.Context, role string, limit int32) ([]models.User, error)
+	ListByRoles(ctx context.Context, roles []string, limit int32) ([]models.User, error)
 	Create(ctx context.Context, login, email, fullName, role, passwordHash string) (models.User, error)
 }
 
@@ -139,6 +140,7 @@ type AdminService struct {
 	batchRepo       AdminBatchRepository
 	markerRepo      AdminMarkerRepository
 	userRepo        AdminUserRepository
+	txPool          repository.TxBeginner
 }
 
 func NewAdminService(
@@ -148,6 +150,7 @@ func NewAdminService(
 	batchRepo AdminBatchRepository,
 	markerRepo AdminMarkerRepository,
 	userRepo AdminUserRepository,
+	txPool repository.TxBeginner,
 ) *AdminService {
 	return &AdminService{
 		productRepo:     productRepo,
@@ -156,6 +159,7 @@ func NewAdminService(
 		batchRepo:       batchRepo,
 		markerRepo:      markerRepo,
 		userRepo:        userRepo,
+		txPool:          txPool,
 	}
 }
 
@@ -201,7 +205,7 @@ func (s *AdminService) ListWorkers(ctx context.Context, limit int32) ([]models.U
 		return nil, err
 	}
 
-	users, err := s.userRepo.ListByRole(ctx, "worker", normalizedLimit)
+	users, err := s.userRepo.ListByRoles(ctx, []string{"admin", "worker"}, normalizedLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -233,9 +237,23 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 		return models.Product{}, models.Marker{}, ErrConflictingBatchTarget
 	}
 
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return models.Product{}, models.Marker{}, fmt.Errorf("begin create product tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	productRepo := repository.NewProductRepositoryWithQuerier(tx)
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+	batchRepo := repository.NewBatchRepositoryWithQuerier(tx)
+	boxRepo := repository.NewBoxRepositoryWithQuerier(tx)
+	storageCellRepo := repository.NewStorageCellRepositoryWithQuerier(tx)
+
 	var boxID *int64
 	if boxCode != "" {
-		box, err := s.boxRepo.GetByCode(ctx, boxCode)
+		box, err := boxRepo.GetByCode(ctx, boxCode)
 		if err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.Product{}, models.Marker{}, ErrInvalidAdminReference
@@ -243,7 +261,7 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 			return models.Product{}, models.Marker{}, err
 		}
 
-		hasBatches, err := s.batchRepo.HasAnyInBox(ctx, box.ID)
+		hasBatches, err := batchRepo.HasAnyInBox(ctx, box.ID)
 		if err != nil {
 			return models.Product{}, models.Marker{}, err
 		}
@@ -256,7 +274,7 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 
 	var storageCellID *int64
 	if storageCellCode != "" {
-		cell, err := s.storageCellRepo.GetByCode(ctx, storageCellCode)
+		cell, err := storageCellRepo.GetByCode(ctx, storageCellCode)
 		if err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.Product{}, models.Marker{}, ErrInvalidAdminReference
@@ -264,26 +282,14 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 			return models.Product{}, models.Marker{}, err
 		}
 
-		hasBoxes, err := s.boxRepo.HasAnyInStorageCell(ctx, cell.ID)
-		if err != nil {
+		if err := ensureStorageCellIsAvailable(ctx, boxRepo, batchRepo, cell.ID); err != nil {
 			return models.Product{}, models.Marker{}, err
-		}
-		if hasBoxes {
-			return models.Product{}, models.Marker{}, ErrAdminTargetOccupied
-		}
-
-		hasBatches, err := s.batchRepo.HasAnyInStorageCell(ctx, cell.ID)
-		if err != nil {
-			return models.Product{}, models.Marker{}, err
-		}
-		if hasBatches {
-			return models.Product{}, models.Marker{}, ErrAdminTargetOccupied
 		}
 
 		storageCellID = &cell.ID
 	}
 
-	existingProduct, err := s.productRepo.GetByName(ctx, name)
+	existingProduct, err := productRepo.GetByName(ctx, name)
 	if err == nil && existingProduct.ID > 0 {
 		return models.Product{}, models.Marker{}, ErrAdminProductExists
 	}
@@ -291,29 +297,36 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 		return models.Product{}, models.Marker{}, err
 	}
 
-	product, err := s.productRepo.Create(ctx, sku, name, unit)
+	product, err := productRepo.Create(ctx, sku, name, unit)
 	if err != nil {
 		return models.Product{}, models.Marker{}, err
 	}
 
-	marker, err := s.markerRepo.Create(ctx, buildMarkerCode("product", product.ID), "product", product.ID)
+	marker, err := markerRepo.Create(ctx, buildMarkerCode("product", product.ID), "product", product.ID)
 	if err != nil {
 		return models.Product{}, models.Marker{}, err
 	}
 
-	if _, _, err := s.CreateBatch(ctx, CreateBatchInput{
-		Code:          buildInitialBatchCode(product.ID),
-		ProductID:     product.ID,
-		Quantity:      input.InitialQuantity,
-		BoxID:         boxID,
-		StorageCellID: storageCellID,
-	}); err != nil {
+	if _, err := batchRepo.Create(
+		ctx,
+		buildInitialBatchCode(product.ID),
+		product.ID,
+		input.InitialQuantity,
+		"active",
+		boxID,
+		nil,
+		storageCellID,
+	); err != nil {
 		return models.Product{}, models.Marker{}, err
 	}
 
-	product, err = s.productRepo.GetByID(ctx, product.ID)
+	product, err = productRepo.GetByID(ctx, product.ID)
 	if err != nil {
 		return models.Product{}, models.Marker{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return models.Product{}, models.Marker{}, fmt.Errorf("commit create product tx: %w", err)
 	}
 
 	return product, marker, nil
@@ -421,6 +434,10 @@ func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (mod
 			}
 			return models.Box{}, models.Marker{}, err
 		}
+
+		if err := ensureStorageCellIsAvailable(ctx, s.boxRepo, s.batchRepo, *input.StorageCellID); err != nil {
+			return models.Box{}, models.Marker{}, err
+		}
 	}
 
 	box, err := s.boxRepo.Create(ctx, code, "active", input.StorageCellID)
@@ -442,12 +459,26 @@ func (s *AdminService) UpdateBox(ctx context.Context, input UpdateBoxInput) (mod
 		return models.Box{}, ErrInvalidAdminInput
 	}
 
+	currentBox, err := s.boxRepo.GetByID(ctx, input.ID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.Box{}, ErrInvalidAdminReference
+		}
+		return models.Box{}, err
+	}
+
 	if input.StorageCellID != nil {
 		if _, err := s.storageCellRepo.GetByID(ctx, *input.StorageCellID); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.Box{}, ErrInvalidAdminReference
 			}
 			return models.Box{}, err
+		}
+
+		if currentBox.StorageCellID == nil || *currentBox.StorageCellID != *input.StorageCellID {
+			if err := ensureStorageCellIsAvailable(ctx, s.boxRepo, s.batchRepo, *input.StorageCellID); err != nil {
+				return models.Box{}, err
+			}
 		}
 	}
 
@@ -501,6 +532,10 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.Batch{}, models.Marker{}, ErrInvalidAdminReference
 			}
+			return models.Batch{}, models.Marker{}, err
+		}
+
+		if err := ensureStorageCellIsAvailable(ctx, s.boxRepo, s.batchRepo, *input.StorageCellID); err != nil {
 			return models.Batch{}, models.Marker{}, err
 		}
 	}
@@ -575,6 +610,12 @@ func (s *AdminService) UpdateBatch(ctx context.Context, input UpdateBatchInput) 
 				return models.Batch{}, ErrInvalidAdminReference
 			}
 			return models.Batch{}, err
+		}
+
+		if currentBatch.StorageCellID == nil || *currentBatch.StorageCellID != *input.StorageCellID {
+			if err := ensureStorageCellIsAvailable(ctx, s.boxRepo, s.batchRepo, *input.StorageCellID); err != nil {
+				return models.Batch{}, err
+			}
 		}
 	}
 
@@ -661,4 +702,29 @@ func hasSingleProductTarget(boxCode string, storageCellCode string) bool {
 
 func buildInitialBatchCode(productID int64) string {
 	return fmt.Sprintf("BAT-INIT-%06d", productID)
+}
+
+func ensureStorageCellIsAvailable(
+	ctx context.Context,
+	boxRepo AdminBoxRepository,
+	batchRepo AdminBatchRepository,
+	storageCellID int64,
+) error {
+	hasBoxes, err := boxRepo.HasAnyInStorageCell(ctx, storageCellID)
+	if err != nil {
+		return err
+	}
+	if hasBoxes {
+		return ErrAdminTargetOccupied
+	}
+
+	hasBatches, err := batchRepo.HasAnyInStorageCell(ctx, storageCellID)
+	if err != nil {
+		return err
+	}
+	if hasBatches {
+		return ErrAdminTargetOccupied
+	}
+
+	return nil
 }

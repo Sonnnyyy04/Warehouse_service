@@ -74,6 +74,7 @@ func main() {
 		batchRepo,
 		markerRepo,
 		userRepo,
+		pool,
 	)
 
 	scanService := service.NewScanService(objectService, scanEventService)

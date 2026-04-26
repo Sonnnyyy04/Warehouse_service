@@ -13,11 +13,15 @@ import (
 )
 
 type BoxRepository struct {
-	pool *pgxpool.Pool
+	db Querier
 }
 
 func NewBoxRepository(pool *pgxpool.Pool) *BoxRepository {
-	return &BoxRepository{pool: pool}
+	return NewBoxRepositoryWithQuerier(pool)
+}
+
+func NewBoxRepositoryWithQuerier(db Querier) *BoxRepository {
+	return &BoxRepository{db: db}
 }
 
 func (r *BoxRepository) GetByID(ctx context.Context, id int64) (models.Box, error) {
@@ -29,7 +33,7 @@ WHERE id = $1
 
 	var box models.Box
 
-	err := r.pool.QueryRow(ctx, query, id).Scan(
+	err := r.db.QueryRow(ctx, query, id).Scan(
 		&box.ID,
 		&box.Code,
 		&box.Status,
@@ -56,7 +60,7 @@ LIMIT 1
 
 	var box models.Box
 
-	err := r.pool.QueryRow(ctx, query, code).Scan(
+	err := r.db.QueryRow(ctx, query, code).Scan(
 		&box.ID,
 		&box.Code,
 		&box.Status,
@@ -81,7 +85,7 @@ ORDER BY id
 LIMIT $1
 `
 
-	rows, err := r.pool.Query(ctx, query, limit)
+	rows, err := r.db.Query(ctx, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list boxes: %w", err)
 	}
@@ -121,7 +125,7 @@ RETURNING id, code, status, pallet_id, storage_cell_id
 
 	var box models.Box
 
-	if err := r.pool.QueryRow(ctx, query, code, status, storageCellID).Scan(
+	if err := r.db.QueryRow(ctx, query, code, status, storageCellID).Scan(
 		&box.ID,
 		&box.Code,
 		&box.Status,
@@ -151,7 +155,7 @@ RETURNING id, code, status, pallet_id, storage_cell_id
 
 	var box models.Box
 
-	if err := r.pool.QueryRow(ctx, query, id, code, status, storageCellID).Scan(
+	if err := r.db.QueryRow(ctx, query, id, code, status, storageCellID).Scan(
 		&box.ID,
 		&box.Code,
 		&box.Status,
@@ -172,7 +176,7 @@ RETURNING id, code, status, pallet_id, storage_cell_id
 }
 
 func (r *BoxRepository) MoveToStorageCell(ctx context.Context, boxID, storageCellID int64) error {
-	cmd, err := r.pool.Exec(ctx, `
+	cmd, err := r.db.Exec(ctx, `
 		UPDATE boxes
 		SET pallet_id = NULL,
 		    storage_cell_id = $2
@@ -199,7 +203,7 @@ SELECT EXISTS (
 `
 
 	var exists bool
-	if err := r.pool.QueryRow(ctx, query, storageCellID).Scan(&exists); err != nil {
+	if err := r.db.QueryRow(ctx, query, storageCellID).Scan(&exists); err != nil {
 		return false, fmt.Errorf("check storage cell box occupancy: %w", err)
 	}
 

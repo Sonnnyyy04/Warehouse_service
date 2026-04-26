@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"Warehouse_service/internal/models"
 	"Warehouse_service/internal/service"
@@ -64,7 +65,7 @@ func (m *AuthMiddleware) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 
 func (m *AuthMiddleware) authenticateRequest(r *http.Request) (models.User, models.UserSession, error) {
 	token := extractBearerToken(r.Header.Get("Authorization"))
-	if token == "" {
+	if token == "" && allowsQueryToken(r) {
 		token = r.URL.Query().Get("access_token")
 	}
 	if token == "" {
@@ -90,5 +91,22 @@ func userFromContext(ctx context.Context) (models.User, bool) {
 }
 
 func acceptsHTML(r *http.Request) bool {
-	return r.Header.Get("Accept") == "" || r.Header.Get("Accept") == "*/*" || r.Header.Get("Accept") == "text/html" || r.Header.Get("Sec-Fetch-Dest") == "document"
+	accept := strings.ToLower(r.Header.Get("Accept"))
+	return accept == "" ||
+		accept == "*/*" ||
+		strings.Contains(accept, "text/html") ||
+		r.Header.Get("Sec-Fetch-Dest") == "document"
+}
+
+func allowsQueryToken(r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+
+	switch r.URL.Path {
+	case "/api/v1/labels/qr", "/labels/print", "/labels/pdf":
+		return true
+	default:
+		return false
+	}
 }

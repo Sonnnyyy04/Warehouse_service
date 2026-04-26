@@ -18,11 +18,15 @@ var (
 )
 
 type MarkerRepository struct {
-	pool *pgxpool.Pool
+	db Querier
 }
 
 func NewMarkerRepository(pool *pgxpool.Pool) *MarkerRepository {
-	return &MarkerRepository{pool: pool}
+	return NewMarkerRepositoryWithQuerier(pool)
+}
+
+func NewMarkerRepositoryWithQuerier(db Querier) *MarkerRepository {
+	return &MarkerRepository{db: db}
 }
 
 func (r *MarkerRepository) GetByCode(ctx context.Context, markerCode string) (models.Marker, error) {
@@ -34,7 +38,7 @@ WHERE marker_code = $1
 
 	var marker models.Marker
 
-	err := r.pool.QueryRow(ctx, query, markerCode).Scan(
+	err := r.db.QueryRow(ctx, query, markerCode).Scan(
 		&marker.ID,
 		&marker.MarkerCode,
 		&marker.ObjectType,
@@ -66,7 +70,7 @@ FROM markers
 	query += fmt.Sprintf("ORDER BY id LIMIT $%d", len(args)+1)
 	args = append(args, limit)
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list markers: %w", err)
 	}
@@ -112,7 +116,7 @@ WHERE marker_code = ANY($1)
 
 	query += "ORDER BY id"
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list markers by codes: %w", err)
 	}
@@ -151,7 +155,7 @@ RETURNING id, marker_code, object_type::text, object_id
 
 	var marker models.Marker
 
-	if err := r.pool.QueryRow(
+	if err := r.db.QueryRow(
 		ctx,
 		query,
 		strings.TrimSpace(markerCode),

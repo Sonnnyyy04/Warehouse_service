@@ -552,6 +552,8 @@ func (h *AdminHandler) CreateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrAdminTargetOccupied):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "СЏС‡РµР№РєР° СЃ С‚Р°РєРёРј РєРѕРґРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
@@ -644,6 +646,8 @@ func (h *AdminHandler) CreateBoxAPI(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrAdminTargetOccupied):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "РєРѕСЂРѕР± СЃ С‚Р°РєРёРј РєРѕРґРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
@@ -679,6 +683,8 @@ func (h *AdminHandler) UpdateBoxAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "СЃРІСЏР·Р°РЅРЅС‹Р№ РѕР±СЉРµРєС‚ РЅРµ РЅР°Р№РґРµРЅ"})
+		case errors.Is(err, service.ErrAdminTargetOccupied):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "РєРѕСЂРѕР± СЃ С‚Р°РєРёРј РєРѕРґРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		default:
@@ -741,6 +747,8 @@ func (h *AdminHandler) CreateBatchAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code, product_id and quantity are required"})
 		case errors.Is(err, service.ErrConflictingBatchTarget):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "РІС‹Р±РµСЂРёС‚Рµ Р»РёР±Рѕ РєРѕСЂРѕР±, Р»РёР±Рѕ СЏС‡РµР№РєСѓ"})
+		case errors.Is(err, service.ErrAdminTargetOccupied):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, service.ErrMixedBoxProducts):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
@@ -782,6 +790,8 @@ func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code, product_id and quantity are required"})
 		case errors.Is(err, service.ErrConflictingBatchTarget):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "РІС‹Р±РµСЂРёС‚Рµ Р»РёР±Рѕ РєРѕСЂРѕР±, Р»РёР±Рѕ СЏС‡РµР№РєСѓ"})
+		case errors.Is(err, service.ErrAdminTargetOccupied):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, service.ErrMixedBoxProducts):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
@@ -859,6 +869,8 @@ func (h *AdminHandler) redirectWithAdminError(w http.ResponseWriter, r *http.Req
 	switch {
 	case errors.Is(err, service.ErrInvalidAdminInput):
 		h.redirectWithError(w, r, "", "Р·Р°РїРѕР»РЅРёС‚Рµ РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рµ РїРѕР»СЏ")
+	case errors.Is(err, service.ErrAdminTargetOccupied):
+		h.redirectWithError(w, r, "", "Целевая ячейка должна быть пустой")
 	case errors.Is(err, service.ErrMixedBoxProducts):
 		h.redirectWithError(w, r, "", "Р’ РѕРґРЅРѕРј РєРѕСЂРѕР±Рµ РјРѕР¶РЅРѕ С…СЂР°РЅРёС‚СЊ С‚РѕР»СЊРєРѕ РѕРґРёРЅ С‚РѕРІР°СЂ")
 	case errors.Is(err, service.ErrInvalidAdminReference):

@@ -13,11 +13,15 @@ import (
 )
 
 type BatchRepository struct {
-	pool *pgxpool.Pool
+	db Querier
 }
 
 func NewBatchRepository(pool *pgxpool.Pool) *BatchRepository {
-	return &BatchRepository{pool: pool}
+	return NewBatchRepositoryWithQuerier(pool)
+}
+
+func NewBatchRepositoryWithQuerier(db Querier) *BatchRepository {
+	return &BatchRepository{db: db}
 }
 
 func (r *BatchRepository) GetByID(ctx context.Context, id int64) (models.Batch, error) {
@@ -29,7 +33,7 @@ WHERE id = $1
 
 	var batch models.Batch
 
-	err := r.pool.QueryRow(ctx, query, id).Scan(
+	err := r.db.QueryRow(ctx, query, id).Scan(
 		&batch.ID,
 		&batch.Code,
 		&batch.ProductID,
@@ -57,7 +61,7 @@ ORDER BY id
 LIMIT $1
 `
 
-	rows, err := r.pool.Query(ctx, query, limit)
+	rows, err := r.db.Query(ctx, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list batches: %w", err)
 	}
@@ -108,7 +112,7 @@ SELECT EXISTS (
 `
 
 	var exists bool
-	if err := r.pool.QueryRow(ctx, query, boxID, productID, excludeBatchID).Scan(&exists); err != nil {
+	if err := r.db.QueryRow(ctx, query, boxID, productID, excludeBatchID).Scan(&exists); err != nil {
 		return false, fmt.Errorf("check box product compatibility: %w", err)
 	}
 
@@ -125,7 +129,7 @@ SELECT EXISTS (
 `
 
 	var exists bool
-	if err := r.pool.QueryRow(ctx, query, boxID).Scan(&exists); err != nil {
+	if err := r.db.QueryRow(ctx, query, boxID).Scan(&exists); err != nil {
 		return false, fmt.Errorf("check box occupancy: %w", err)
 	}
 
@@ -142,7 +146,7 @@ SELECT EXISTS (
 `
 
 	var exists bool
-	if err := r.pool.QueryRow(ctx, query, storageCellID).Scan(&exists); err != nil {
+	if err := r.db.QueryRow(ctx, query, storageCellID).Scan(&exists); err != nil {
 		return false, fmt.Errorf("check storage cell occupancy: %w", err)
 	}
 
@@ -150,7 +154,7 @@ SELECT EXISTS (
 }
 
 func (r *BatchRepository) MoveToBox(ctx context.Context, batchID, boxID int64) error {
-	cmd, err := r.pool.Exec(ctx, `
+	cmd, err := r.db.Exec(ctx, `
 		UPDATE batches
 		SET box_id = $2,
 		    pallet_id = NULL,
@@ -169,7 +173,7 @@ func (r *BatchRepository) MoveToBox(ctx context.Context, batchID, boxID int64) e
 }
 
 func (r *BatchRepository) MoveToStorageCell(ctx context.Context, batchID, storageCellID int64) error {
-	cmd, err := r.pool.Exec(ctx, `
+	cmd, err := r.db.Exec(ctx, `
 		UPDATE batches
 		SET box_id = NULL,
 		    pallet_id = NULL,
@@ -205,7 +209,7 @@ RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cel
 
 	var batch models.Batch
 
-	if err := r.pool.QueryRow(
+	if err := r.db.QueryRow(
 		ctx,
 		query,
 		code,
@@ -261,7 +265,7 @@ RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cel
 
 	var batch models.Batch
 
-	if err := r.pool.QueryRow(
+	if err := r.db.QueryRow(
 		ctx,
 		query,
 		id,

@@ -13,11 +13,15 @@ import (
 )
 
 type ProductRepository struct {
-	pool *pgxpool.Pool
+	db Querier
 }
 
 func NewProductRepository(pool *pgxpool.Pool) *ProductRepository {
-	return &ProductRepository{pool: pool}
+	return NewProductRepositoryWithQuerier(pool)
+}
+
+func NewProductRepositoryWithQuerier(db Querier) *ProductRepository {
+	return &ProductRepository{db: db}
 }
 
 func (r *ProductRepository) GetByID(ctx context.Context, id int64) (models.Product, error) {
@@ -31,7 +35,7 @@ GROUP BY p.id, p.sku, p.name, p.unit
 
 	var product models.Product
 
-	err := r.pool.QueryRow(ctx, query, id).Scan(
+	err := r.db.QueryRow(ctx, query, id).Scan(
 		&product.ID,
 		&product.SKU,
 		&product.Name,
@@ -60,7 +64,7 @@ LIMIT 1
 
 	var product models.Product
 
-	err := r.pool.QueryRow(ctx, query, name).Scan(
+	err := r.db.QueryRow(ctx, query, name).Scan(
 		&product.ID,
 		&product.SKU,
 		&product.Name,
@@ -87,7 +91,7 @@ ORDER BY p.id
 LIMIT $1
 `
 
-	rows, err := r.pool.Query(ctx, query, limit)
+	rows, err := r.db.Query(ctx, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list products: %w", err)
 	}
@@ -127,7 +131,7 @@ RETURNING id, sku, name, unit, 0
 
 	var product models.Product
 
-	if err := r.pool.QueryRow(ctx, query, sku, name, unit).Scan(
+	if err := r.db.QueryRow(ctx, query, sku, name, unit).Scan(
 		&product.ID,
 		&product.SKU,
 		&product.Name,
@@ -162,7 +166,7 @@ GROUP BY u.id, u.sku, u.name, u.unit
 
 	var product models.Product
 
-	if err := r.pool.QueryRow(ctx, query, id, sku, name, unit).Scan(
+	if err := r.db.QueryRow(ctx, query, id, sku, name, unit).Scan(
 		&product.ID,
 		&product.SKU,
 		&product.Name,

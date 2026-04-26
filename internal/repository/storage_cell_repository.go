@@ -13,11 +13,15 @@ import (
 )
 
 type StorageCellRepository struct {
-	pool *pgxpool.Pool
+	db Querier
 }
 
 func NewStorageCellRepository(pool *pgxpool.Pool) *StorageCellRepository {
-	return &StorageCellRepository{pool: pool}
+	return NewStorageCellRepositoryWithQuerier(pool)
+}
+
+func NewStorageCellRepositoryWithQuerier(db Querier) *StorageCellRepository {
+	return &StorageCellRepository{db: db}
 }
 
 func (r *StorageCellRepository) GetByID(ctx context.Context, id int64) (models.StorageCell, error) {
@@ -29,7 +33,7 @@ WHERE id = $1
 
 	var cell models.StorageCell
 
-	err := r.pool.QueryRow(ctx, query, id).Scan(
+	err := r.db.QueryRow(ctx, query, id).Scan(
 		&cell.ID,
 		&cell.Code,
 		&cell.Name,
@@ -56,7 +60,7 @@ LIMIT 1
 
 	var cell models.StorageCell
 
-	err := r.pool.QueryRow(ctx, query, code).Scan(
+	err := r.db.QueryRow(ctx, query, code).Scan(
 		&cell.ID,
 		&cell.Code,
 		&cell.Name,
@@ -81,7 +85,7 @@ ORDER BY id
 LIMIT $1
 `
 
-	rows, err := r.pool.Query(ctx, query, limit)
+	rows, err := r.db.Query(ctx, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list storage cells: %w", err)
 	}
@@ -121,7 +125,7 @@ RETURNING id, code, name, zone, status
 
 	var cell models.StorageCell
 
-	if err := r.pool.QueryRow(ctx, query, code, name, zone, status).Scan(
+	if err := r.db.QueryRow(ctx, query, code, name, zone, status).Scan(
 		&cell.ID,
 		&cell.Code,
 		&cell.Name,
@@ -151,7 +155,7 @@ RETURNING id, code, name, zone, status
 
 	var cell models.StorageCell
 
-	if err := r.pool.QueryRow(ctx, query, id, code, name, zone, status).Scan(
+	if err := r.db.QueryRow(ctx, query, id, code, name, zone, status).Scan(
 		&cell.ID,
 		&cell.Code,
 		&cell.Name,
