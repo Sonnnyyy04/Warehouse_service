@@ -222,13 +222,10 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 	if sku == "" || name == "" {
 		return models.Product{}, models.Marker{}, ErrInvalidAdminInput
 	}
-	if input.InitialQuantity < 0 {
+	if input.InitialQuantity <= 0 {
 		return models.Product{}, models.Marker{}, ErrInvalidAdminInput
 	}
-	if input.InitialQuantity == 0 && (boxCode != "" || storageCellCode != "") {
-		return models.Product{}, models.Marker{}, ErrInvalidAdminInput
-	}
-	if input.InitialQuantity > 0 && !hasSingleProductTarget(boxCode, storageCellCode) {
+	if !hasSingleProductTarget(boxCode, storageCellCode) {
 		return models.Product{}, models.Marker{}, ErrConflictingBatchTarget
 	}
 
@@ -284,21 +281,19 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 		return models.Product{}, models.Marker{}, err
 	}
 
-	if input.InitialQuantity > 0 {
-		if _, _, err := s.CreateBatch(ctx, CreateBatchInput{
-			Code:          buildInitialBatchCode(product.ID),
-			ProductID:     product.ID,
-			Quantity:      input.InitialQuantity,
-			BoxID:         boxID,
-			StorageCellID: storageCellID,
-		}); err != nil {
-			return models.Product{}, models.Marker{}, err
-		}
+	if _, _, err := s.CreateBatch(ctx, CreateBatchInput{
+		Code:          buildInitialBatchCode(product.ID),
+		ProductID:     product.ID,
+		Quantity:      input.InitialQuantity,
+		BoxID:         boxID,
+		StorageCellID: storageCellID,
+	}); err != nil {
+		return models.Product{}, models.Marker{}, err
+	}
 
-		product, err = s.productRepo.GetByID(ctx, product.ID)
-		if err != nil {
-			return models.Product{}, models.Marker{}, err
-		}
+	product, err = s.productRepo.GetByID(ctx, product.ID)
+	if err != nil {
+		return models.Product{}, models.Marker{}, err
 	}
 
 	return product, marker, nil

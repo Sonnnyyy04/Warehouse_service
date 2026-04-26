@@ -116,10 +116,12 @@ func parseProductImportRows(reader io.Reader) ([]productImportRow, error) {
 			continue
 		}
 
-		if quantityValue != "" {
+		if quantityValue == "" {
+			row.ValidationError = "Количество обязательно и должно быть больше 0"
+		} else {
 			quantity, parseErr := strconv.Atoi(quantityValue)
-			if parseErr != nil || quantity < 0 {
-				row.ValidationError = "Количество должно быть целым числом от 0 и больше"
+			if parseErr != nil || quantity <= 0 {
+				row.ValidationError = "Количество обязательно и должно быть больше 0"
 			} else {
 				row.Quantity = int32(quantity)
 			}
@@ -183,7 +185,10 @@ func resolveProductImportHeaderIndexes(header []string) (productImportHeaderInde
 		}
 	}
 
-	if indexes.sku < 0 || indexes.name < 0 {
+	if indexes.sku < 0 || indexes.name < 0 || indexes.quantity < 0 {
+		return productImportHeaderIndexes{}, ErrInvalidAdminImport
+	}
+	if indexes.boxCode < 0 && indexes.storageCellCode < 0 {
 		return productImportHeaderIndexes{}, ErrInvalidAdminImport
 	}
 
