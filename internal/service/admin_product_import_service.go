@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -14,10 +15,14 @@ import (
 )
 
 type productImportRow struct {
-	Row  int
-	SKU  string
-	Name string
-	Unit string
+	Row             int
+	SKU             string
+	Name            string
+	Unit            string
+	Quantity        int32
+	BoxCode         string
+	StorageCellCode string
+	ValidationError string
 }
 
 func (s *AdminService) ImportProducts(ctx context.Context, reader io.Reader) (models.ProductImportResult, error) {
@@ -32,10 +37,24 @@ func (s *AdminService) ImportProducts(ctx context.Context, reader io.Reader) (mo
 	}
 
 	for _, row := range rows {
+		if row.ValidationError != "" {
+			result.SkippedCount++
+			result.Errors = append(result.Errors, models.ProductImportRowError{
+				Row:   row.Row,
+				SKU:   row.SKU,
+				Name:  row.Name,
+				Error: row.ValidationError,
+			})
+			continue
+		}
+
 		_, _, createErr := s.CreateProduct(ctx, CreateProductInput{
-			SKU:  row.SKU,
-			Name: row.Name,
-			Unit: row.Unit,
+			SKU:             row.SKU,
+			Name:            row.Name,
+			Unit:            row.Unit,
+			InitialQuantity: row.Quantity,
+			BoxCode:         row.BoxCode,
+			StorageCellCode: row.StorageCellCode,
 		})
 		if createErr != nil {
 			result.SkippedCount++
@@ -76,7 +95,7 @@ func parseProductImportRows(reader io.Reader) ([]productImportRow, error) {
 		return nil, ErrEmptyAdminImport
 	}
 
-	skuIndex, nameIndex, unitIndex, err := resolveProductImportHeaderIndexes(rawRows[0])
+	indexes, err := resolveProductImportHeaderIndexes(rawRows[0])
 	if err != nil {
 		return nil, err
 	}
@@ -84,14 +103,26 @@ func parseProductImportRows(reader io.Reader) ([]productImportRow, error) {
 	rows := make([]productImportRow, 0, len(rawRows)-1)
 	for index, rawRow := range rawRows[1:] {
 		row := productImportRow{
-			Row:  index + 2,
-			SKU:  strings.TrimSpace(cellValue(rawRow, skuIndex)),
-			Name: strings.TrimSpace(cellValue(rawRow, nameIndex)),
-			Unit: strings.TrimSpace(cellValue(rawRow, unitIndex)),
+			Row:             index + 2,
+			SKU:             strings.TrimSpace(cellValue(rawRow, indexes.sku)),
+			Name:            strings.TrimSpace(cellValue(rawRow, indexes.name)),
+			Unit:            strings.TrimSpace(cellValue(rawRow, indexes.unit)),
+			BoxCode:         strings.TrimSpace(cellValue(rawRow, indexes.boxCode)),
+			StorageCellCode: strings.TrimSpace(cellValue(rawRow, indexes.storageCellCode)),
 		}
 
-		if row.SKU == "" && row.Name == "" && row.Unit == "" {
+		quantityValue := strings.TrimSpace(cellValue(rawRow, indexes.quantity))
+		if row.SKU == "" && row.Name == "" && row.Unit == "" && quantityValue == "" && row.BoxCode == "" && row.StorageCellCode == "" {
 			continue
+		}
+
+		if quantityValue != "" {
+			quantity, parseErr := strconv.Atoi(quantityValue)
+			if parseErr != nil || quantity < 0 {
+				row.ValidationError = "Количество должно быть целым числом от 0 и больше"
+			} else {
+				row.Quantity = int32(quantity)
+			}
 		}
 
 		rows = append(rows, row)
@@ -104,33 +135,59 @@ func parseProductImportRows(reader io.Reader) ([]productImportRow, error) {
 	return rows, nil
 }
 
-func resolveProductImportHeaderIndexes(header []string) (int, int, int, error) {
-	skuIndex := -1
-	nameIndex := -1
-	unitIndex := -1
+type productImportHeaderIndexes struct {
+	sku             int
+	name            int
+	unit            int
+	quantity        int
+	boxCode         int
+	storageCellCode int
+}
+
+func resolveProductImportHeaderIndexes(header []string) (productImportHeaderIndexes, error) {
+	indexes := productImportHeaderIndexes{
+		sku:             -1,
+		name:            -1,
+		unit:            -1,
+		quantity:        -1,
+		boxCode:         -1,
+		storageCellCode: -1,
+	}
 
 	for index, rawValue := range header {
 		switch normalizeProductImportHeader(rawValue) {
 		case "sku", "артикул", "кодтовара":
-			if skuIndex < 0 {
-				skuIndex = index
+			if indexes.sku < 0 {
+				indexes.sku = index
 			}
 		case "name", "название", "наименование", "товар":
-			if nameIndex < 0 {
-				nameIndex = index
+			if indexes.name < 0 {
+				indexes.name = index
 			}
 		case "unit", "ед", "едизм", "единица", "единицаизмерения":
-			if unitIndex < 0 {
-				unitIndex = index
+			if indexes.unit < 0 {
+				indexes.unit = index
+			}
+		case "quantity", "количество", "колво", "остаток":
+			if indexes.quantity < 0 {
+				indexes.quantity = index
+			}
+		case "box", "короб", "кодкороба", "boxcode":
+			if indexes.boxCode < 0 {
+				indexes.boxCode = index
+			}
+		case "storagecell", "ячейка", "кодячейки", "cell", "cellcode":
+			if indexes.storageCellCode < 0 {
+				indexes.storageCellCode = index
 			}
 		}
 	}
 
-	if skuIndex < 0 || nameIndex < 0 {
-		return 0, 0, 0, ErrInvalidAdminImport
+	if indexes.sku < 0 || indexes.name < 0 {
+		return productImportHeaderIndexes{}, ErrInvalidAdminImport
 	}
 
-	return skuIndex, nameIndex, unitIndex, nil
+	return indexes, nil
 }
 
 func normalizeProductImportHeader(value string) string {
@@ -162,7 +219,13 @@ func cellValue(row []string, index int) string {
 func mapProductImportRowError(err error) string {
 	switch {
 	case errors.Is(err, ErrInvalidAdminInput):
-		return "Укажите SKU и название"
+		return "Проверьте SKU, название и начальное количество"
+	case errors.Is(err, ErrConflictingBatchTarget):
+		return "Для количества укажите либо короб, либо ячейку"
+	case errors.Is(err, ErrInvalidAdminReference):
+		return "Указанный короб или ячейка не найдены"
+	case errors.Is(err, ErrMixedBoxProducts):
+		return "Короб для нового товара должен быть пустым"
 	case errors.Is(err, ErrAdminProductExists):
 		return "Товар с таким названием уже существует"
 	case errors.Is(err, repository.ErrConflict), errors.Is(err, ErrAdminConflict):

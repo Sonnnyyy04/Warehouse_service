@@ -34,6 +34,7 @@ type AdminProductRepository interface {
 type AdminStorageCellRepository interface {
 	List(ctx context.Context, limit int32) ([]models.StorageCell, error)
 	GetByID(ctx context.Context, id int64) (models.StorageCell, error)
+	GetByCode(ctx context.Context, code string) (models.StorageCell, error)
 	Create(ctx context.Context, code, name string, zone *string, status string) (models.StorageCell, error)
 	Update(ctx context.Context, id int64, code, name string, zone *string, status string) (models.StorageCell, error)
 }
@@ -41,6 +42,7 @@ type AdminStorageCellRepository interface {
 type AdminBoxRepository interface {
 	List(ctx context.Context, limit int32) ([]models.Box, error)
 	GetByID(ctx context.Context, id int64) (models.Box, error)
+	GetByCode(ctx context.Context, code string) (models.Box, error)
 	Create(ctx context.Context, code, status string, storageCellID *int64) (models.Box, error)
 	Update(ctx context.Context, id int64, code, status string, storageCellID *int64) (models.Box, error)
 }
@@ -63,9 +65,12 @@ type AdminUserRepository interface {
 }
 
 type CreateProductInput struct {
-	SKU  string
-	Name string
-	Unit string
+	SKU             string
+	Name            string
+	Unit            string
+	InitialQuantity int32
+	BoxCode         string
+	StorageCellCode string
 }
 
 type UpdateProductInput struct {
@@ -208,12 +213,57 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 	sku := strings.TrimSpace(input.SKU)
 	name := strings.TrimSpace(input.Name)
 	unit := strings.TrimSpace(input.Unit)
+	boxCode := strings.TrimSpace(input.BoxCode)
+	storageCellCode := strings.TrimSpace(input.StorageCellCode)
 	if unit == "" {
 		unit = "pcs"
 	}
 
 	if sku == "" || name == "" {
 		return models.Product{}, models.Marker{}, ErrInvalidAdminInput
+	}
+	if input.InitialQuantity < 0 {
+		return models.Product{}, models.Marker{}, ErrInvalidAdminInput
+	}
+	if input.InitialQuantity == 0 && (boxCode != "" || storageCellCode != "") {
+		return models.Product{}, models.Marker{}, ErrInvalidAdminInput
+	}
+	if input.InitialQuantity > 0 && !hasSingleProductTarget(boxCode, storageCellCode) {
+		return models.Product{}, models.Marker{}, ErrConflictingBatchTarget
+	}
+
+	var boxID *int64
+	if boxCode != "" {
+		box, err := s.boxRepo.GetByCode(ctx, boxCode)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return models.Product{}, models.Marker{}, ErrInvalidAdminReference
+			}
+			return models.Product{}, models.Marker{}, err
+		}
+
+		hasBatches, err := s.batchRepo.HasOtherProductInBox(ctx, box.ID, 0, nil)
+		if err != nil {
+			return models.Product{}, models.Marker{}, err
+		}
+		if hasBatches {
+			return models.Product{}, models.Marker{}, ErrMixedBoxProducts
+		}
+
+		boxID = &box.ID
+	}
+
+	var storageCellID *int64
+	if storageCellCode != "" {
+		cell, err := s.storageCellRepo.GetByCode(ctx, storageCellCode)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return models.Product{}, models.Marker{}, ErrInvalidAdminReference
+			}
+			return models.Product{}, models.Marker{}, err
+		}
+
+		storageCellID = &cell.ID
 	}
 
 	existingProduct, err := s.productRepo.GetByName(ctx, name)
@@ -232,6 +282,23 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 	marker, err := s.markerRepo.Create(ctx, buildMarkerCode("product", product.ID), "product", product.ID)
 	if err != nil {
 		return models.Product{}, models.Marker{}, err
+	}
+
+	if input.InitialQuantity > 0 {
+		if _, _, err := s.CreateBatch(ctx, CreateBatchInput{
+			Code:          buildInitialBatchCode(product.ID),
+			ProductID:     product.ID,
+			Quantity:      input.InitialQuantity,
+			BoxID:         boxID,
+			StorageCellID: storageCellID,
+		}); err != nil {
+			return models.Product{}, models.Marker{}, err
+		}
+
+		product, err = s.productRepo.GetByID(ctx, product.ID)
+		if err != nil {
+			return models.Product{}, models.Marker{}, err
+		}
 	}
 
 	return product, marker, nil
@@ -571,4 +638,12 @@ func sanitizeAdminUser(user models.User) models.User {
 
 func hasSingleBatchTarget(boxID *int64, storageCellID *int64) bool {
 	return (boxID == nil) != (storageCellID == nil)
+}
+
+func hasSingleProductTarget(boxCode string, storageCellCode string) bool {
+	return (boxCode == "") != (storageCellCode == "")
+}
+
+func buildInitialBatchCode(productID int64) string {
+	return fmt.Sprintf("BAT-INIT-%06d", productID)
 }

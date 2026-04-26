@@ -7,8 +7,8 @@ import (
 
 	"Warehouse_service/internal/models"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -41,6 +41,33 @@ WHERE id = $1
 			return models.Box{}, ErrNotFound
 		}
 		return models.Box{}, fmt.Errorf("get box by id: %w", err)
+	}
+
+	return box, nil
+}
+
+func (r *BoxRepository) GetByCode(ctx context.Context, code string) (models.Box, error) {
+	const query = `
+SELECT id, code, status, pallet_id, storage_cell_id
+FROM boxes
+WHERE LOWER(code) = LOWER($1)
+LIMIT 1
+`
+
+	var box models.Box
+
+	err := r.pool.QueryRow(ctx, query, code).Scan(
+		&box.ID,
+		&box.Code,
+		&box.Status,
+		&box.PalletID,
+		&box.StorageCellID,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Box{}, ErrNotFound
+		}
+		return models.Box{}, fmt.Errorf("get box by code: %w", err)
 	}
 
 	return box, nil

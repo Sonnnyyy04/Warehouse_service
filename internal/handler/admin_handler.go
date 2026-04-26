@@ -289,9 +289,12 @@ type createWorkerRequest struct {
 }
 
 type createProductRequest struct {
-	SKU  string `json:"sku"`
-	Name string `json:"name"`
-	Unit string `json:"unit"`
+	SKU             string `json:"sku"`
+	Name            string `json:"name"`
+	Unit            string `json:"unit"`
+	InitialQuantity int32  `json:"initial_quantity"`
+	BoxCode         string `json:"box_code"`
+	StorageCellCode string `json:"storage_cell_code"`
 }
 
 type createProductResponse struct {
@@ -401,14 +404,23 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 	}
 
 	product, marker, err := h.adminUseCase.CreateProduct(ctx, service.CreateProductInput{
-		SKU:  req.SKU,
-		Name: req.Name,
-		Unit: req.Unit,
+		SKU:             req.SKU,
+		Name:            req.Name,
+		Unit:            req.Unit,
+		InitialQuantity: req.InitialQuantity,
+		BoxCode:         req.BoxCode,
+		StorageCellCode: req.StorageCellCode,
 	})
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sku and name are required"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sku, name and initial quantity must be valid"})
+		case errors.Is(err, service.ErrConflictingBatchTarget):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "initial quantity requires exactly one target: box_code or storage_cell_code"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "box or storage cell not found"})
+		case errors.Is(err, service.ErrMixedBoxProducts):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "target box must be empty for a new product"})
 		case errors.Is(err, service.ErrAdminProductExists):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "С‚Р°РєРѕР№ С‚РѕРІР°СЂ СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"})
 		case errors.Is(err, repository.ErrConflict), errors.Is(err, service.ErrAdminConflict):

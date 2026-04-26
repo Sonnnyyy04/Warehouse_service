@@ -7,8 +7,8 @@ import (
 
 	"Warehouse_service/internal/models"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -41,6 +41,33 @@ WHERE id = $1
 			return models.StorageCell{}, ErrNotFound
 		}
 		return models.StorageCell{}, fmt.Errorf("get storage cell by id: %w", err)
+	}
+
+	return cell, nil
+}
+
+func (r *StorageCellRepository) GetByCode(ctx context.Context, code string) (models.StorageCell, error) {
+	const query = `
+SELECT id, code, name, zone, status
+FROM storage_cells
+WHERE LOWER(code) = LOWER($1)
+LIMIT 1
+`
+
+	var cell models.StorageCell
+
+	err := r.pool.QueryRow(ctx, query, code).Scan(
+		&cell.ID,
+		&cell.Code,
+		&cell.Name,
+		&cell.Zone,
+		&cell.Status,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.StorageCell{}, ErrNotFound
+		}
+		return models.StorageCell{}, fmt.Errorf("get storage cell by code: %w", err)
 	}
 
 	return cell, nil
