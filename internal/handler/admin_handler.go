@@ -286,6 +286,7 @@ type createWorkerRequest struct {
 	FullName string `json:"full_name"`
 	Password string `json:"password"`
 	Email    string `json:"email"`
+	Role     string `json:"role"`
 }
 
 type createProductRequest struct {
@@ -849,13 +850,14 @@ func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 		FullName: req.FullName,
 		Password: req.Password,
 		Email:    req.Email,
+		Role:     req.Role,
 	})
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login, full_name and password are required"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login, full_name, role and password are required"})
 		case errors.Is(err, service.ErrAdminConflict):
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "worker login already exists"})
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "user login already exists"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}

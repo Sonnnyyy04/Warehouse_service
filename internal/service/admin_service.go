@@ -131,6 +131,7 @@ type CreateWorkerInput struct {
 	FullName string
 	Password string
 	Email    string
+	Role     string
 }
 
 type AdminService struct {
@@ -645,8 +646,15 @@ func (s *AdminService) CreateWorker(ctx context.Context, input CreateWorkerInput
 	fullName := strings.TrimSpace(input.FullName)
 	password := strings.TrimSpace(input.Password)
 	email := strings.TrimSpace(strings.ToLower(input.Email))
+	role := strings.TrimSpace(strings.ToLower(input.Role))
+	if role == "" {
+		role = "worker"
+	}
 
 	if login == "" || fullName == "" || password == "" || len(password) < 6 {
+		return models.User{}, ErrInvalidAdminInput
+	}
+	if role != "worker" && role != "admin" {
 		return models.User{}, ErrInvalidAdminInput
 	}
 
@@ -659,7 +667,7 @@ func (s *AdminService) CreateWorker(ctx context.Context, input CreateWorkerInput
 		return models.User{}, err
 	}
 
-	user, err := s.userRepo.Create(ctx, login, email, fullName, "worker", string(passwordHash))
+	user, err := s.userRepo.Create(ctx, login, email, fullName, role, string(passwordHash))
 	if err != nil {
 		if errors.Is(err, repository.ErrConflict) {
 			return models.User{}, ErrAdminConflict
