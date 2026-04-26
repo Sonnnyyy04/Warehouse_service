@@ -419,6 +419,8 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "initial quantity requires exactly one target: box_code or storage_cell_code"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "box or storage cell not found"})
+		case errors.Is(err, service.ErrAdminTargetOccupied):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty for a new product"})
 		case errors.Is(err, service.ErrMixedBoxProducts):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target box must be empty for a new product"})
 		case errors.Is(err, service.ErrAdminProductExists):

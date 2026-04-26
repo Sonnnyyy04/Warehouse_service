@@ -229,6 +229,8 @@ func mapProductImportRowError(err error) string {
 		return "Для количества укажите либо короб, либо ячейку"
 	case errors.Is(err, ErrInvalidAdminReference):
 		return "Указанный короб или ячейка не найдены"
+	case errors.Is(err, ErrAdminTargetOccupied):
+		return "Выбранная ячейка уже занята"
 	case errors.Is(err, ErrMixedBoxProducts):
 		return "Короб для нового товара должен быть пустым"
 	case errors.Is(err, ErrAdminProductExists):

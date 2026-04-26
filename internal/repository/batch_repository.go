@@ -115,6 +115,40 @@ SELECT EXISTS (
 	return exists, nil
 }
 
+func (r *BatchRepository) HasAnyInBox(ctx context.Context, boxID int64) (bool, error) {
+	const query = `
+SELECT EXISTS (
+    SELECT 1
+    FROM batches
+    WHERE box_id = $1
+)
+`
+
+	var exists bool
+	if err := r.pool.QueryRow(ctx, query, boxID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check box occupancy: %w", err)
+	}
+
+	return exists, nil
+}
+
+func (r *BatchRepository) HasAnyInStorageCell(ctx context.Context, storageCellID int64) (bool, error) {
+	const query = `
+SELECT EXISTS (
+    SELECT 1
+    FROM batches
+    WHERE storage_cell_id = $1
+)
+`
+
+	var exists bool
+	if err := r.pool.QueryRow(ctx, query, storageCellID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check storage cell occupancy: %w", err)
+	}
+
+	return exists, nil
+}
+
 func (r *BatchRepository) MoveToBox(ctx context.Context, batchID, boxID int64) error {
 	cmd, err := r.pool.Exec(ctx, `
 		UPDATE batches

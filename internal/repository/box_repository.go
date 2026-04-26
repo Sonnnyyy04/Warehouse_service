@@ -188,3 +188,20 @@ func (r *BoxRepository) MoveToStorageCell(ctx context.Context, boxID, storageCel
 
 	return nil
 }
+
+func (r *BoxRepository) HasAnyInStorageCell(ctx context.Context, storageCellID int64) (bool, error) {
+	const query = `
+SELECT EXISTS (
+    SELECT 1
+    FROM boxes
+    WHERE storage_cell_id = $1
+)
+`
+
+	var exists bool
+	if err := r.pool.QueryRow(ctx, query, storageCellID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check storage cell box occupancy: %w", err)
+	}
+
+	return exists, nil
+}

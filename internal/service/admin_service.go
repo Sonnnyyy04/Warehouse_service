@@ -17,6 +17,7 @@ var (
 	ErrInvalidAdminImport     = errors.New("invalid admin import")
 	ErrEmptyAdminImport       = errors.New("empty admin import")
 	ErrInvalidAdminReference  = errors.New("invalid admin reference")
+	ErrAdminTargetOccupied    = errors.New("admin target occupied")
 	ErrConflictingBatchTarget = errors.New("conflicting batch target")
 	ErrMixedBoxProducts       = errors.New("mixed box products")
 	ErrAdminConflict          = errors.New("admin conflict")
@@ -43,6 +44,7 @@ type AdminBoxRepository interface {
 	List(ctx context.Context, limit int32) ([]models.Box, error)
 	GetByID(ctx context.Context, id int64) (models.Box, error)
 	GetByCode(ctx context.Context, code string) (models.Box, error)
+	HasAnyInStorageCell(ctx context.Context, storageCellID int64) (bool, error)
 	Create(ctx context.Context, code, status string, storageCellID *int64) (models.Box, error)
 	Update(ctx context.Context, id int64, code, status string, storageCellID *int64) (models.Box, error)
 }
@@ -51,6 +53,8 @@ type AdminBatchRepository interface {
 	List(ctx context.Context, limit int32) ([]models.Batch, error)
 	GetByID(ctx context.Context, id int64) (models.Batch, error)
 	HasOtherProductInBox(ctx context.Context, boxID int64, productID int64, excludeBatchID *int64) (bool, error)
+	HasAnyInBox(ctx context.Context, boxID int64) (bool, error)
+	HasAnyInStorageCell(ctx context.Context, storageCellID int64) (bool, error)
 	Create(ctx context.Context, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
 	Update(ctx context.Context, id int64, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
 }
@@ -239,7 +243,7 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 			return models.Product{}, models.Marker{}, err
 		}
 
-		hasBatches, err := s.batchRepo.HasOtherProductInBox(ctx, box.ID, 0, nil)
+		hasBatches, err := s.batchRepo.HasAnyInBox(ctx, box.ID)
 		if err != nil {
 			return models.Product{}, models.Marker{}, err
 		}
@@ -258,6 +262,22 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 				return models.Product{}, models.Marker{}, ErrInvalidAdminReference
 			}
 			return models.Product{}, models.Marker{}, err
+		}
+
+		hasBoxes, err := s.boxRepo.HasAnyInStorageCell(ctx, cell.ID)
+		if err != nil {
+			return models.Product{}, models.Marker{}, err
+		}
+		if hasBoxes {
+			return models.Product{}, models.Marker{}, ErrAdminTargetOccupied
+		}
+
+		hasBatches, err := s.batchRepo.HasAnyInStorageCell(ctx, cell.ID)
+		if err != nil {
+			return models.Product{}, models.Marker{}, err
+		}
+		if hasBatches {
+			return models.Product{}, models.Marker{}, ErrAdminTargetOccupied
 		}
 
 		storageCellID = &cell.ID
