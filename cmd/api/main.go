@@ -100,7 +100,7 @@ func main() {
 	moveBatchHandler := handler.NewMoveBatchHandler(moveBatchService)
 	labelHandler := handler.NewLabelHandler(labelService)
 	authHandler := handler.NewAuthHandler(authService)
-	adminHandler := handler.NewAdminHandler(adminService, labelService)
+	adminHandler := handler.NewAdminHandler(adminService)
 	authMiddleware := handler.NewAuthMiddleware(authService)
 
 	mux := http.NewServeMux()
@@ -133,26 +133,6 @@ func main() {
 		switch r.Method {
 		case http.MethodPost:
 			authHandler.APILogout(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
-	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			authHandler.WebLoginPage(w, r)
-		case http.MethodPost:
-			authHandler.WebLogin(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	mux.HandleFunc("/logout", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet, http.MethodPost:
-			authHandler.WebLogout(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -299,82 +279,10 @@ func main() {
 		}
 	}))
 
-	mux.HandleFunc("/labels/print", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			labelHandler.PrintPage(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
 	mux.HandleFunc("/labels/pdf", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			labelHandler.DownloadPDF(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
-	mux.HandleFunc("/admin/labels", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			adminHandler.Page(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
-	mux.HandleFunc("/admin", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			adminHandler.Page(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
-	mux.HandleFunc("/admin/products", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			adminHandler.CreateProduct(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
-	mux.HandleFunc("/admin/products/update", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			adminHandler.UpdateProduct(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
-	mux.HandleFunc("/admin/storage-cells", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			adminHandler.CreateStorageCell(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
-	mux.HandleFunc("/admin/boxes", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			adminHandler.CreateBox(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
-	mux.HandleFunc("/admin/batches", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			adminHandler.CreateBatch(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
