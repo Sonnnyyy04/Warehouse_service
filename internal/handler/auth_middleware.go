@@ -56,9 +56,6 @@ func (m *AuthMiddleware) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 
 func (m *AuthMiddleware) authenticateRequest(r *http.Request) (models.User, models.UserSession, error) {
 	token := extractBearerToken(r.Header.Get("Authorization"))
-	if token == "" && allowsQueryToken(r) {
-		token = r.URL.Query().Get("access_token")
-	}
 
 	user, session, err := m.useCase.Authenticate(r.Context(), token)
 	if err != nil {
@@ -74,8 +71,4 @@ func (m *AuthMiddleware) authenticateRequest(r *http.Request) (models.User, mode
 func userFromContext(ctx context.Context) (models.User, bool) {
 	user, ok := ctx.Value(userContextKey).(models.User)
 	return user, ok
-}
-
-func allowsQueryToken(r *http.Request) bool {
-	return r.Method == http.MethodGet && r.URL.Path == "/api/v1/labels/qr"
 }
