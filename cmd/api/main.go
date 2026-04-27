@@ -279,7 +279,7 @@ func main() {
 		}
 	}))
 
-	mux.HandleFunc("/labels/pdf", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/labels/pdf", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			labelHandler.DownloadPDF(w, r)
