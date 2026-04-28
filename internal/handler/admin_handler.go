@@ -619,6 +619,10 @@ func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login, full_name, role and password are required"})
+		case errors.Is(err, service.ErrInvalidAdminLogin):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login must contain only latin letters"})
+		case errors.Is(err, service.ErrInvalidAdminPassword):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be between 6 and 20 characters"})
 		case errors.Is(err, service.ErrAdminConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "user login already exists"})
 		default:

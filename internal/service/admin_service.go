@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"Warehouse_service/internal/models"
@@ -14,6 +15,8 @@ import (
 
 var (
 	ErrInvalidAdminInput      = errors.New("invalid admin input")
+	ErrInvalidAdminLogin      = errors.New("invalid admin login")
+	ErrInvalidAdminPassword   = errors.New("invalid admin password")
 	ErrInvalidAdminImport     = errors.New("invalid admin import")
 	ErrEmptyAdminImport       = errors.New("empty admin import")
 	ErrInvalidAdminReference  = errors.New("invalid admin reference")
@@ -23,6 +26,8 @@ var (
 	ErrAdminConflict          = errors.New("admin conflict")
 	ErrAdminProductExists     = errors.New("admin product exists")
 )
+
+var latinLoginPattern = regexp.MustCompile(`^[a-z]+$`)
 
 type AdminProductRepository interface {
 	List(ctx context.Context, limit int32) ([]models.Product, error)
@@ -651,8 +656,14 @@ func (s *AdminService) CreateWorker(ctx context.Context, input CreateWorkerInput
 		role = "worker"
 	}
 
-	if login == "" || fullName == "" || password == "" || len(password) < 6 {
+	if login == "" || fullName == "" || password == "" {
 		return models.User{}, ErrInvalidAdminInput
+	}
+	if !latinLoginPattern.MatchString(login) {
+		return models.User{}, ErrInvalidAdminLogin
+	}
+	if len(password) < 6 || len(password) > 20 {
+		return models.User{}, ErrInvalidAdminPassword
 	}
 	if role != "worker" && role != "admin" {
 		return models.User{}, ErrInvalidAdminInput
