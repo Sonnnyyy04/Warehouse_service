@@ -209,3 +209,20 @@ SELECT EXISTS (
 
 	return exists, nil
 }
+
+func (r *BoxRepository) DeleteByID(ctx context.Context, id int64) error {
+	const query = `
+DELETE FROM boxes
+WHERE id = $1
+`
+
+	commandTag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("delete box: %w", err)
+	}
+	if commandTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}

@@ -153,6 +153,23 @@ SELECT EXISTS (
 	return exists, nil
 }
 
+func (r *BatchRepository) HasAnyForProduct(ctx context.Context, productID int64) (bool, error) {
+	const query = `
+SELECT EXISTS (
+    SELECT 1
+    FROM batches
+    WHERE product_id = $1
+)
+`
+
+	var exists bool
+	if err := r.db.QueryRow(ctx, query, productID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check product batch existence: %w", err)
+	}
+
+	return exists, nil
+}
+
 func (r *BatchRepository) MoveToBox(ctx context.Context, batchID, boxID int64) error {
 	cmd, err := r.db.Exec(ctx, `
 		UPDATE batches
@@ -297,4 +314,21 @@ RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cel
 	}
 
 	return batch, nil
+}
+
+func (r *BatchRepository) DeleteByID(ctx context.Context, id int64) error {
+	const query = `
+DELETE FROM batches
+WHERE id = $1
+`
+
+	commandTag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("delete batch: %w", err)
+	}
+	if commandTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
 }

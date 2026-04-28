@@ -185,3 +185,20 @@ GROUP BY u.id, u.sku, u.name, u.unit
 
 	return product, nil
 }
+
+func (r *ProductRepository) DeleteByID(ctx context.Context, id int64) error {
+	const query = `
+DELETE FROM products
+WHERE id = $1
+`
+
+	commandTag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("delete product: %w", err)
+	}
+	if commandTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}

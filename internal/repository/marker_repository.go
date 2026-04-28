@@ -172,3 +172,17 @@ RETURNING id, marker_code, object_type::text, object_id
 
 	return marker, nil
 }
+
+func (r *MarkerRepository) DeleteByObject(ctx context.Context, objectType string, objectID int64) error {
+	const query = `
+DELETE FROM markers
+WHERE object_type = $1::object_type
+  AND object_id = $2
+`
+
+	if _, err := r.db.Exec(ctx, query, strings.TrimSpace(objectType), objectID); err != nil {
+		return fmt.Errorf("delete marker by object: %w", err)
+	}
+
+	return nil
+}

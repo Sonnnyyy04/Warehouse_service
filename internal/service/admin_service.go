@@ -27,6 +27,9 @@ var (
 	ErrMixedBoxProducts       = errors.New("mixed box products")
 	ErrAdminConflict          = errors.New("admin conflict")
 	ErrAdminProductExists     = errors.New("admin product exists")
+	ErrAdminProductHasBatches = errors.New("admin product has batches")
+	ErrAdminBoxNotEmpty       = errors.New("admin box not empty")
+	ErrAdminStorageCellBusy   = errors.New("admin storage cell busy")
 )
 
 var latinLoginPattern = regexp.MustCompile(`^[a-z]+$`)
@@ -37,6 +40,7 @@ type AdminProductRepository interface {
 	GetByName(ctx context.Context, name string) (models.Product, error)
 	Create(ctx context.Context, sku, name, unit string) (models.Product, error)
 	Update(ctx context.Context, id int64, sku, name, unit string) (models.Product, error)
+	DeleteByID(ctx context.Context, id int64) error
 }
 
 type AdminStorageCellRepository interface {
@@ -45,6 +49,7 @@ type AdminStorageCellRepository interface {
 	GetByCode(ctx context.Context, code string) (models.StorageCell, error)
 	Create(ctx context.Context, code, name string, zone *string, status string) (models.StorageCell, error)
 	Update(ctx context.Context, id int64, code, name string, zone *string, status string) (models.StorageCell, error)
+	DeleteByID(ctx context.Context, id int64) error
 }
 
 type AdminBoxRepository interface {
@@ -54,6 +59,7 @@ type AdminBoxRepository interface {
 	HasAnyInStorageCell(ctx context.Context, storageCellID int64) (bool, error)
 	Create(ctx context.Context, code, status string, storageCellID *int64) (models.Box, error)
 	Update(ctx context.Context, id int64, code, status string, storageCellID *int64) (models.Box, error)
+	DeleteByID(ctx context.Context, id int64) error
 }
 
 type AdminBatchRepository interface {
@@ -62,12 +68,15 @@ type AdminBatchRepository interface {
 	HasOtherProductInBox(ctx context.Context, boxID int64, productID int64, excludeBatchID *int64) (bool, error)
 	HasAnyInBox(ctx context.Context, boxID int64) (bool, error)
 	HasAnyInStorageCell(ctx context.Context, storageCellID int64) (bool, error)
+	HasAnyForProduct(ctx context.Context, productID int64) (bool, error)
 	Create(ctx context.Context, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
 	Update(ctx context.Context, id int64, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
+	DeleteByID(ctx context.Context, id int64) error
 }
 
 type AdminMarkerRepository interface {
 	Create(ctx context.Context, markerCode, objectType string, objectID int64) (models.Marker, error)
+	DeleteByObject(ctx context.Context, objectType string, objectID int64) error
 }
 
 type AdminUserRepository interface {
@@ -374,6 +383,48 @@ func (s *AdminService) UpdateProduct(ctx context.Context, input UpdateProductInp
 	return product, nil
 }
 
+func (s *AdminService) DeleteProduct(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return ErrInvalidAdminInput
+	}
+
+	hasBatches, err := s.batchRepo.HasAnyForProduct(ctx, id)
+	if err != nil {
+		return err
+	}
+	if hasBatches {
+		return ErrAdminProductHasBatches
+	}
+
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin delete product tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	productRepo := repository.NewProductRepositoryWithQuerier(tx)
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+
+	if err := productRepo.DeleteByID(ctx, id); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrInvalidAdminReference
+		}
+		return err
+	}
+
+	if err := markerRepo.DeleteByObject(ctx, "product", id); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete product tx: %w", err)
+	}
+
+	return nil
+}
+
 func (s *AdminService) CreateStorageCell(ctx context.Context, input CreateStorageCellInput) (models.StorageCell, models.Marker, error) {
 	code := strings.TrimSpace(input.Code)
 	name := strings.TrimSpace(input.Name)
@@ -430,6 +481,47 @@ func (s *AdminService) UpdateStorageCell(ctx context.Context, input UpdateStorag
 	}
 
 	return cell, nil
+}
+
+func (s *AdminService) DeleteStorageCell(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return ErrInvalidAdminInput
+	}
+
+	if err := ensureStorageCellIsAvailable(ctx, s.boxRepo, s.batchRepo, id); err != nil {
+		if errors.Is(err, ErrAdminTargetOccupied) {
+			return ErrAdminStorageCellBusy
+		}
+		return err
+	}
+
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin delete storage cell tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	storageCellRepo := repository.NewStorageCellRepositoryWithQuerier(tx)
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+
+	if err := storageCellRepo.DeleteByID(ctx, id); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrInvalidAdminReference
+		}
+		return err
+	}
+
+	if err := markerRepo.DeleteByObject(ctx, "storage_cell", id); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete storage cell tx: %w", err)
+	}
+
+	return nil
 }
 
 func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (models.Box, models.Marker, error) {
@@ -502,6 +594,48 @@ func (s *AdminService) UpdateBox(ctx context.Context, input UpdateBoxInput) (mod
 	}
 
 	return box, nil
+}
+
+func (s *AdminService) DeleteBox(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return ErrInvalidAdminInput
+	}
+
+	hasBatches, err := s.batchRepo.HasAnyInBox(ctx, id)
+	if err != nil {
+		return err
+	}
+	if hasBatches {
+		return ErrAdminBoxNotEmpty
+	}
+
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin delete box tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	boxRepo := repository.NewBoxRepositoryWithQuerier(tx)
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+
+	if err := boxRepo.DeleteByID(ctx, id); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrInvalidAdminReference
+		}
+		return err
+	}
+
+	if err := markerRepo.DeleteByObject(ctx, "box", id); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete box tx: %w", err)
+	}
+
+	return nil
 }
 
 func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) (models.Batch, models.Marker, error) {
@@ -649,6 +783,40 @@ func (s *AdminService) UpdateBatch(ctx context.Context, input UpdateBatchInput) 
 	}
 
 	return batch, nil
+}
+
+func (s *AdminService) DeleteBatch(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return ErrInvalidAdminInput
+	}
+
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin delete batch tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	batchRepo := repository.NewBatchRepositoryWithQuerier(tx)
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+
+	if err := batchRepo.DeleteByID(ctx, id); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrInvalidAdminReference
+		}
+		return err
+	}
+
+	if err := markerRepo.DeleteByObject(ctx, "batch", id); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete batch tx: %w", err)
+	}
+
+	return nil
 }
 
 func (s *AdminService) CreateWorker(ctx context.Context, input CreateWorkerInput) (models.User, error) {

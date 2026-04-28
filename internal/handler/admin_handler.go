@@ -23,12 +23,16 @@ type AdminUseCase interface {
 	CreateProduct(ctx context.Context, input service.CreateProductInput) (models.Product, models.Marker, error)
 	ImportProducts(ctx context.Context, reader io.Reader) (models.ProductImportResult, error)
 	UpdateProduct(ctx context.Context, input service.UpdateProductInput) (models.Product, error)
+	DeleteProduct(ctx context.Context, id int64) error
 	CreateStorageCell(ctx context.Context, input service.CreateStorageCellInput) (models.StorageCell, models.Marker, error)
 	UpdateStorageCell(ctx context.Context, input service.UpdateStorageCellInput) (models.StorageCell, error)
+	DeleteStorageCell(ctx context.Context, id int64) error
 	CreateBox(ctx context.Context, input service.CreateBoxInput) (models.Box, models.Marker, error)
 	UpdateBox(ctx context.Context, input service.UpdateBoxInput) (models.Box, error)
+	DeleteBox(ctx context.Context, id int64) error
 	CreateBatch(ctx context.Context, input service.CreateBatchInput) (models.Batch, models.Marker, error)
 	UpdateBatch(ctx context.Context, input service.UpdateBatchInput) (models.Batch, error)
+	DeleteBatch(ctx context.Context, id int64) error
 	CreateWorker(ctx context.Context, input service.CreateWorkerInput) (models.User, error)
 	DeleteWorker(ctx context.Context, actor models.User, userID int64) error
 }
@@ -127,6 +131,10 @@ type updateBatchRequest struct {
 }
 
 type deleteWorkerRequest struct {
+	ID int64 `json:"id"`
+}
+
+type deleteEntityRequest struct {
 	ID int64 `json:"id"`
 }
 
@@ -271,6 +279,33 @@ func (h *AdminHandler) UpdateProductAPI(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, product)
 }
 
+func (h *AdminHandler) DeleteProductAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req deleteEntityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if err := h.adminUseCase.DeleteProduct(ctx, req.ID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid product_id"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "product not found"})
+		case errors.Is(err, service.ErrAdminProductHasBatches):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "product cannot be deleted while batches exist"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func (h *AdminHandler) ListStorageCellsAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -367,6 +402,33 @@ func (h *AdminHandler) UpdateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, storageCell)
 }
 
+func (h *AdminHandler) DeleteStorageCellAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req deleteEntityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if err := h.adminUseCase.DeleteStorageCell(ctx, req.ID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid storage_cell_id"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "storage cell not found"})
+		case errors.Is(err, service.ErrAdminStorageCellBusy):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell cannot be deleted while it contains boxes or batches"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func (h *AdminHandler) ListBoxesAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -461,6 +523,33 @@ func (h *AdminHandler) UpdateBoxAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, box)
+}
+
+func (h *AdminHandler) DeleteBoxAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req deleteEntityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if err := h.adminUseCase.DeleteBox(ctx, req.ID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid box_id"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "box not found"})
+		case errors.Is(err, service.ErrAdminBoxNotEmpty):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "box cannot be deleted while batches exist"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (h *AdminHandler) ListBatchesAPI(w http.ResponseWriter, r *http.Request) {
@@ -573,6 +662,31 @@ func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, batch)
+}
+
+func (h *AdminHandler) DeleteBatchAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req deleteEntityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if err := h.adminUseCase.DeleteBatch(ctx, req.ID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid batch_id"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "batch not found"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (h *AdminHandler) ListWorkersAPI(w http.ResponseWriter, r *http.Request) {
