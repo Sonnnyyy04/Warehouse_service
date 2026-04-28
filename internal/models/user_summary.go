@@ -1,8 +1,9 @@
 package models
 
 type UserSummary struct {
-	ID       int64  `json:"id"`
-	Login    string `json:"login"`
-	FullName string `json:"full_name"`
-	Role     string `json:"role"`
+	ID           int64  `json:"id"`
+	Login        string `json:"login"`
+	FullName     string `json:"full_name"`
+	Role         string `json:"role"`
+	IsSuperAdmin bool   `json:"is_super_admin"`
 }

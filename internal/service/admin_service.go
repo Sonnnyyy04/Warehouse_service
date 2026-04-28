@@ -17,6 +17,8 @@ var (
 	ErrInvalidAdminInput      = errors.New("invalid admin input")
 	ErrInvalidAdminLogin      = errors.New("invalid admin login")
 	ErrInvalidAdminPassword   = errors.New("invalid admin password")
+	ErrAdminPermissionDenied  = errors.New("admin permission denied")
+	ErrAdminSelfDelete        = errors.New("admin self delete")
 	ErrInvalidAdminImport     = errors.New("invalid admin import")
 	ErrEmptyAdminImport       = errors.New("empty admin import")
 	ErrInvalidAdminReference  = errors.New("invalid admin reference")
@@ -71,7 +73,9 @@ type AdminMarkerRepository interface {
 type AdminUserRepository interface {
 	ListByRole(ctx context.Context, role string, limit int32) ([]models.User, error)
 	ListByRoles(ctx context.Context, roles []string, limit int32) ([]models.User, error)
+	GetByID(ctx context.Context, id int64) (models.User, error)
 	Create(ctx context.Context, login, email, fullName, role, passwordHash string) (models.User, error)
+	DeleteByID(ctx context.Context, id int64) error
 }
 
 type CreateProductInput struct {
@@ -132,6 +136,7 @@ type UpdateBatchInput struct {
 }
 
 type CreateWorkerInput struct {
+	Actor    models.User
 	Login    string
 	FullName string
 	Password string
@@ -668,6 +673,9 @@ func (s *AdminService) CreateWorker(ctx context.Context, input CreateWorkerInput
 	if role != "worker" && role != "admin" {
 		return models.User{}, ErrInvalidAdminInput
 	}
+	if role == "admin" && !input.Actor.IsSuperAdmin {
+		return models.User{}, ErrAdminPermissionDenied
+	}
 
 	if email == "" {
 		email = login + "@warehouse.local"
@@ -687,6 +695,37 @@ func (s *AdminService) CreateWorker(ctx context.Context, input CreateWorkerInput
 	}
 
 	return sanitizeAdminUser(user), nil
+}
+
+func (s *AdminService) DeleteWorker(ctx context.Context, actor models.User, userID int64) error {
+	if userID <= 0 {
+		return ErrInvalidAdminInput
+	}
+
+	targetUser, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrInvalidAdminReference
+		}
+		return err
+	}
+
+	if actor.ID == targetUser.ID {
+		return ErrAdminSelfDelete
+	}
+
+	if targetUser.Role == "admin" && !actor.IsSuperAdmin {
+		return ErrAdminPermissionDenied
+	}
+
+	if err := s.userRepo.DeleteByID(ctx, userID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrInvalidAdminReference
+		}
+		return err
+	}
+
+	return nil
 }
 
 func buildMarkerCode(objectType string, objectID int64) string {

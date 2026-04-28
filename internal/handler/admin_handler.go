@@ -30,6 +30,7 @@ type AdminUseCase interface {
 	CreateBatch(ctx context.Context, input service.CreateBatchInput) (models.Batch, models.Marker, error)
 	UpdateBatch(ctx context.Context, input service.UpdateBatchInput) (models.Batch, error)
 	CreateWorker(ctx context.Context, input service.CreateWorkerInput) (models.User, error)
+	DeleteWorker(ctx context.Context, actor models.User, userID int64) error
 }
 
 type AdminHandler struct {
@@ -123,6 +124,10 @@ type updateBatchRequest struct {
 	Quantity      int32  `json:"quantity"`
 	BoxID         *int64 `json:"box_id"`
 	StorageCellID *int64 `json:"storage_cell_id"`
+}
+
+type deleteWorkerRequest struct {
+	ID int64 `json:"id"`
 }
 
 func (h *AdminHandler) ListProductsAPI(w http.ResponseWriter, r *http.Request) {
@@ -602,6 +607,12 @@ func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
+	authUser, ok := userFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
 	var req createWorkerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
@@ -609,6 +620,7 @@ func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	worker, err := h.adminUseCase.CreateWorker(ctx, service.CreateWorkerInput{
+		Actor:    authUser,
 		Login:    req.Login,
 		FullName: req.FullName,
 		Password: req.Password,
@@ -623,6 +635,8 @@ func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login must contain only latin letters"})
 		case errors.Is(err, service.ErrInvalidAdminPassword):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be between 6 and 20 characters"})
+		case errors.Is(err, service.ErrAdminPermissionDenied):
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "only super admin can manage admin accounts"})
 		case errors.Is(err, service.ErrAdminConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "user login already exists"})
 		default:
@@ -632,4 +646,39 @@ func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, worker)
+}
+
+func (h *AdminHandler) DeleteWorkerAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	authUser, ok := userFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	var req deleteWorkerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if err := h.adminUseCase.DeleteWorker(ctx, authUser, req.ID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user_id"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user not found"})
+		case errors.Is(err, service.ErrAdminSelfDelete):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot delete current user"})
+		case errors.Is(err, service.ErrAdminPermissionDenied):
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "only super admin can manage admin accounts"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

@@ -21,8 +21,8 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 }
 
 func (r *UserRepository) GetByLogin(ctx context.Context, login string) (models.User, error) {
-	const query = `
-SELECT id, login, email, full_name, role, password_hash
+const query = `
+SELECT id, login, email, full_name, role, is_super_admin, password_hash
 FROM users
 WHERE login = $1
 `
@@ -35,6 +35,7 @@ WHERE login = $1
 		&user.Email,
 		&user.FullName,
 		&user.Role,
+		&user.IsSuperAdmin,
 		&user.PasswordHash,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -47,8 +48,8 @@ WHERE login = $1
 }
 
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (models.User, error) {
-	const query = `
-SELECT id, login, email, full_name, role, password_hash
+const query = `
+SELECT id, login, email, full_name, role, is_super_admin, password_hash
 FROM users
 WHERE id = $1
 `
@@ -61,6 +62,7 @@ WHERE id = $1
 		&user.Email,
 		&user.FullName,
 		&user.Role,
+		&user.IsSuperAdmin,
 		&user.PasswordHash,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -77,11 +79,11 @@ func (r *UserRepository) ListByRole(ctx context.Context, role string, limit int3
 }
 
 func (r *UserRepository) ListByRoles(ctx context.Context, roles []string, limit int32) ([]models.User, error) {
-	const query = `
-SELECT id, login, email, full_name, role, password_hash
+const query = `
+SELECT id, login, email, full_name, role, is_super_admin, password_hash
 FROM users
 WHERE role = ANY($1)
-ORDER BY role, full_name, id
+ORDER BY is_super_admin DESC, role, full_name, id
 LIMIT $2
 `
 
@@ -102,6 +104,7 @@ LIMIT $2
 			&user.Email,
 			&user.FullName,
 			&user.Role,
+			&user.IsSuperAdmin,
 			&user.PasswordHash,
 		); err != nil {
 			return nil, fmt.Errorf("scan user row: %w", err)
@@ -118,10 +121,10 @@ LIMIT $2
 }
 
 func (r *UserRepository) Create(ctx context.Context, login, email, fullName, role, passwordHash string) (models.User, error) {
-	const query = `
+const query = `
 INSERT INTO users (login, email, full_name, role, password_hash)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, login, email, full_name, role, password_hash
+RETURNING id, login, email, full_name, role, is_super_admin, password_hash
 `
 
 	var user models.User
@@ -132,6 +135,7 @@ RETURNING id, login, email, full_name, role, password_hash
 		&user.Email,
 		&user.FullName,
 		&user.Role,
+		&user.IsSuperAdmin,
 		&user.PasswordHash,
 	); err != nil {
 		var pgErr *pgconn.PgError
@@ -142,4 +146,21 @@ RETURNING id, login, email, full_name, role, password_hash
 	}
 
 	return user, nil
+}
+
+func (r *UserRepository) DeleteByID(ctx context.Context, id int64) error {
+	const query = `
+DELETE FROM users
+WHERE id = $1
+`
+
+	commandTag, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("delete user by id: %w", err)
+	}
+	if commandTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
 }

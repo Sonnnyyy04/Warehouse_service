@@ -192,6 +192,8 @@ func main() {
 			adminHandler.ListWorkersAPI(w, r)
 		case http.MethodPost:
 			adminHandler.CreateWorkerAPI(w, r)
+		case http.MethodDelete:
+			adminHandler.DeleteWorkerAPI(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
