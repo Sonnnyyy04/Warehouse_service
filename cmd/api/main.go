@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"github.com/jackc/pgx/v5/pgxpool"
-	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"log"
 	"net/http"
 	"os"
@@ -15,15 +14,8 @@ import (
 	"time"
 
 	"Warehouse_service/internal/config"
-	_ "Warehouse_service/internal/docs"
 	"Warehouse_service/internal/handler"
 )
-
-// @title API сервиса склада
-// @version 1.0
-// @description Backend API складского мобильного приложения
-// @BasePath /
-// @description API для мобильных складских сценариев.
 func main() {
 	cfg := config.MustLoad()
 
@@ -104,10 +96,6 @@ func main() {
 	authMiddleware := handler.NewAuthMiddleware(authService)
 
 	mux := http.NewServeMux()
-
-	mux.Handle("/swagger/", httpSwagger.Handler(
-		httpSwagger.URL("/swagger/doc.json"),
-	))
 
 	mux.HandleFunc("/healthz", healthzHandler(pool))
 
