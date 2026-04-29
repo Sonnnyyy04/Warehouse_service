@@ -38,6 +38,7 @@ type MoveBoxInput struct {
 	BoxMarkerCode           string
 	ToStorageCellMarkerCode string
 	UserID                  *int64
+	Actor                   *models.UserSummary
 }
 
 type MoveBoxService struct {
@@ -162,6 +163,7 @@ func (s *MoveBoxService) Execute(ctx context.Context, input MoveBoxInput) (model
 		ObjectID:      box.ID,
 		OperationType: "move_box",
 		UserID:        input.UserID,
+		Actor:         input.Actor,
 		Details:       &rawDetails,
 	})
 	if err != nil {

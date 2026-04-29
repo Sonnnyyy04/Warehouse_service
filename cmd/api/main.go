@@ -151,8 +151,6 @@ func main() {
 
 	mux.HandleFunc("/api/v1/scan-events", authMiddleware.RequireAuthenticated(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		case http.MethodPost:
-			scanEventHandler.Create(w, r)
 		case http.MethodGet:
 			scanEventHandler.List(w, r)
 		default:
@@ -162,8 +160,6 @@ func main() {
 
 	mux.HandleFunc("/api/v1/operations", authMiddleware.RequireAuthenticated(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		case http.MethodPost:
-			operationHistoryHandler.Create(w, r)
 		case http.MethodGet:
 			operationHistoryHandler.List(w, r)
 		default:

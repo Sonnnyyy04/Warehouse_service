@@ -45,6 +45,7 @@ type MoveBatchInput struct {
 	BatchMarkerCode  string
 	TargetMarkerCode string
 	UserID           *int64
+	Actor            *models.UserSummary
 }
 
 type MoveBatchService struct {
@@ -238,6 +239,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 		ObjectID:      batch.ID,
 		OperationType: "move_batch",
 		UserID:        input.UserID,
+		Actor:         input.Actor,
 		Details:       &rawDetails,
 	})
 	if err != nil {

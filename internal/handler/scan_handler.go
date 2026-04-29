@@ -68,6 +68,7 @@ func (h *ScanHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	result, err := h.useCase.Execute(ctx, service.ScanObjectInput{
 		MarkerCode: req.MarkerCode,
 		UserID:     &authUser.ID,
+		Actor:      service.UserSummaryFromUser(authUser),
 		DeviceInfo: req.DeviceInfo,
 	})
 	if err != nil {

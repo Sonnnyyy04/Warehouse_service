@@ -69,6 +69,7 @@ func (h *OperationHistoryHandler) Create(w http.ResponseWriter, r *http.Request)
 		ObjectID:      req.ObjectID,
 		OperationType: req.OperationType,
 		UserID:        &authUser.ID,
+		Actor:         service.UserSummaryFromUser(authUser),
 		Details:       req.Details,
 	})
 	if err != nil {

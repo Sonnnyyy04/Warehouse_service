@@ -28,24 +28,59 @@ func (r *OperationHistoryRepository) Create(
 	objectID int64,
 	operationType string,
 	userID *int64,
+	actor *models.UserSummary,
 	details []byte,
 ) (models.OperationHistory, error) {
 	const query = `
-INSERT INTO operation_history (object_type, object_id, operation_type, user_id, details)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, object_type::text, object_id, operation_type, user_id, details, created_at
+INSERT INTO operation_history (
+    object_type,
+    object_id,
+    operation_type,
+    user_id,
+    actor_user_id,
+    actor_login,
+    actor_full_name,
+    actor_role,
+    actor_is_super_admin,
+    details
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, object_type::text, object_id, operation_type, user_id, actor_user_id, actor_login, actor_full_name, actor_role, actor_is_super_admin, details, created_at
 `
 
 	var operation models.OperationHistory
 	var dbUserID sql.NullInt64
+	var actorID sql.NullInt64
+	var actorLogin sql.NullString
+	var actorFullName sql.NullString
+	var actorRole sql.NullString
+	var actorIsSuperAdmin bool
 	var dbDetails []byte
 
-	err := r.db.QueryRow(ctx, query, objectType, objectID, operationType, userID, details).Scan(
+	var actorUserID any
+	var actorLoginValue any
+	var actorFullNameValue any
+	var actorRoleValue any
+	actorIsSuperAdminValue := false
+	if actor != nil {
+		actorUserID = actor.ID
+		actorLoginValue = actor.Login
+		actorFullNameValue = actor.FullName
+		actorRoleValue = actor.Role
+		actorIsSuperAdminValue = actor.IsSuperAdmin
+	}
+
+	err := r.db.QueryRow(ctx, query, objectType, objectID, operationType, userID, actorUserID, actorLoginValue, actorFullNameValue, actorRoleValue, actorIsSuperAdminValue, details).Scan(
 		&operation.ID,
 		&operation.ObjectType,
 		&operation.ObjectID,
 		&operation.OperationType,
 		&dbUserID,
+		&actorID,
+		&actorLogin,
+		&actorFullName,
+		&actorRole,
+		&actorIsSuperAdmin,
 		&dbDetails,
 		&operation.CreatedAt,
 	)
@@ -59,6 +94,18 @@ RETURNING id, object_type::text, object_id, operation_type, user_id, details, cr
 	if dbDetails != nil {
 		raw := json.RawMessage(dbDetails)
 		operation.Details = &raw
+	}
+	if actorLogin.Valid || actorFullName.Valid || actorRole.Valid || actorID.Valid {
+		summary := models.UserSummary{
+			Login:        actorLogin.String,
+			FullName:     actorFullName.String,
+			Role:         actorRole.String,
+			IsSuperAdmin: actorIsSuperAdmin,
+		}
+		if actorID.Valid {
+			summary.ID = actorID.Int64
+		}
+		operation.Actor = &summary
 	}
 
 	return operation, nil
@@ -75,12 +122,18 @@ SELECT
     oh.object_id,
     oh.operation_type,
     oh.user_id,
+    oh.actor_user_id,
+    oh.actor_login,
+    oh.actor_full_name,
+    oh.actor_role,
+    oh.actor_is_super_admin,
     oh.details,
     oh.created_at,
     u.id,
     u.login,
     u.full_name,
-    u.role
+    u.role,
+    COALESCE(u.is_super_admin, FALSE)
 FROM operation_history oh
 LEFT JOIN users u ON u.id = oh.user_id
 `
@@ -118,11 +171,17 @@ LEFT JOIN users u ON u.id = oh.user_id
 	for rows.Next() {
 		var operation models.OperationHistory
 		var dbUserID sql.NullInt64
+		var snapshotActorID sql.NullInt64
+		var snapshotActorLogin sql.NullString
+		var snapshotActorFullName sql.NullString
+		var snapshotActorRole sql.NullString
+		var snapshotActorIsSuperAdmin bool
 		var dbDetails []byte
 		var actorID sql.NullInt64
 		var actorLogin sql.NullString
 		var actorFullName sql.NullString
 		var actorRole sql.NullString
+		var actorIsSuperAdmin bool
 
 		if err := rows.Scan(
 			&operation.ID,
@@ -130,12 +189,18 @@ LEFT JOIN users u ON u.id = oh.user_id
 			&operation.ObjectID,
 			&operation.OperationType,
 			&dbUserID,
+			&snapshotActorID,
+			&snapshotActorLogin,
+			&snapshotActorFullName,
+			&snapshotActorRole,
+			&snapshotActorIsSuperAdmin,
 			&dbDetails,
 			&operation.CreatedAt,
 			&actorID,
 			&actorLogin,
 			&actorFullName,
 			&actorRole,
+			&actorIsSuperAdmin,
 		); err != nil {
 			return nil, fmt.Errorf("scan operation history row: %w", err)
 		}
@@ -147,13 +212,34 @@ LEFT JOIN users u ON u.id = oh.user_id
 			raw := json.RawMessage(dbDetails)
 			operation.Details = &raw
 		}
-		if actorID.Valid {
-			operation.Actor = &models.UserSummary{
-				ID:       actorID.Int64,
-				Login:    actorLogin.String,
-				FullName: actorFullName.String,
-				Role:     actorRole.String,
+		if actorID.Valid || snapshotActorID.Valid || actorLogin.Valid || snapshotActorLogin.Valid || actorFullName.Valid || snapshotActorFullName.Valid || actorRole.Valid || snapshotActorRole.Valid {
+			summary := models.UserSummary{
+				IsSuperAdmin: snapshotActorIsSuperAdmin,
 			}
+			if actorID.Valid {
+				summary.ID = actorID.Int64
+			} else if snapshotActorID.Valid {
+				summary.ID = snapshotActorID.Int64
+			}
+			if actorLogin.Valid {
+				summary.Login = actorLogin.String
+			} else {
+				summary.Login = snapshotActorLogin.String
+			}
+			if actorFullName.Valid {
+				summary.FullName = actorFullName.String
+			} else {
+				summary.FullName = snapshotActorFullName.String
+			}
+			if actorRole.Valid {
+				summary.Role = actorRole.String
+			} else {
+				summary.Role = snapshotActorRole.String
+			}
+			if actorID.Valid {
+				summary.IsSuperAdmin = actorIsSuperAdmin
+			}
+			operation.Actor = &summary
 		}
 
 		operations = append(operations, operation)

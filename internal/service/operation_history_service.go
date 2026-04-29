@@ -19,6 +19,7 @@ type OperationHistoryRepository interface {
 		objectID int64,
 		operationType string,
 		userID *int64,
+		actor *models.UserSummary,
 		details []byte,
 	) (models.OperationHistory, error)
 
@@ -30,6 +31,7 @@ type CreateOperationInput struct {
 	ObjectID      int64
 	OperationType string
 	UserID        *int64
+	Actor         *models.UserSummary
 	Details       *json.RawMessage
 }
 
@@ -60,7 +62,7 @@ func (s *OperationHistoryService) Create(ctx context.Context, input CreateOperat
 		details = *input.Details
 	}
 
-	return s.repo.Create(ctx, objectType, input.ObjectID, operationType, input.UserID, details)
+	return s.repo.Create(ctx, objectType, input.ObjectID, operationType, input.UserID, input.Actor, details)
 }
 
 func (s *OperationHistoryService) List(ctx context.Context, filter models.OperationHistoryFilter) ([]models.OperationHistory, error) {

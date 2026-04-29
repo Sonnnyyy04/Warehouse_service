@@ -69,6 +69,7 @@ func (h *MoveBoxHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		BoxMarkerCode:           req.BoxMarkerCode,
 		ToStorageCellMarkerCode: req.ToStorageCellMarkerCode,
 		UserID:                  &authUser.ID,
+		Actor:                   service.UserSummaryFromUser(authUser),
 	})
 	if err != nil {
 		switch {

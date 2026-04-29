@@ -56,6 +56,7 @@ func (h *MoveBatchHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		BatchMarkerCode:  req.BatchMarkerCode,
 		TargetMarkerCode: req.TargetMarkerCode,
 		UserID:           &authUser.ID,
+		Actor:            service.UserSummaryFromUser(authUser),
 	})
 	if err != nil {
 		switch {

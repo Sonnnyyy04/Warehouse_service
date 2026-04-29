@@ -16,6 +16,7 @@ type ScanEventRepository interface {
 		ctx context.Context,
 		markerCode string,
 		userID *int64,
+		actor *models.UserSummary,
 		deviceInfo *string,
 		success bool,
 	) (models.ScanEvent, error)
@@ -26,6 +27,7 @@ type ScanEventRepository interface {
 type CreateScanEventInput struct {
 	MarkerCode string
 	UserID     *int64
+	Actor      *models.UserSummary
 	DeviceInfo *string
 	Success    *bool
 }
@@ -49,7 +51,7 @@ func (s *ScanEventService) Create(ctx context.Context, input CreateScanEventInpu
 		success = *input.Success
 	}
 
-	return s.repo.Create(ctx, markerCode, input.UserID, input.DeviceInfo, success)
+	return s.repo.Create(ctx, markerCode, input.UserID, input.Actor, input.DeviceInfo, success)
 }
 
 func (s *ScanEventService) List(ctx context.Context, filter models.ScanEventFilter) ([]models.ScanEvent, error) {

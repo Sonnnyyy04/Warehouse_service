@@ -65,6 +65,7 @@ func (h *ScanEventHandler) Create(w http.ResponseWriter, r *http.Request) {
 	event, err := h.useCase.Create(ctx, service.CreateScanEventInput{
 		MarkerCode: req.MarkerCode,
 		UserID:     &authUser.ID,
+		Actor:      service.UserSummaryFromUser(authUser),
 		DeviceInfo: req.DeviceInfo,
 		Success:    req.Success,
 	})

@@ -25,23 +25,57 @@ func (r *ScanEventRepository) Create(
 	ctx context.Context,
 	markerCode string,
 	userID *int64,
+	actor *models.UserSummary,
 	deviceInfo *string,
 	success bool,
 ) (models.ScanEvent, error) {
 	const query = `
-INSERT INTO scan_events (marker_code, user_id, device_info, success)
-VALUES ($1, $2, $3, $4)
-RETURNING id, marker_code, user_id, device_info, success, scanned_at
+INSERT INTO scan_events (
+    marker_code,
+    user_id,
+    actor_user_id,
+    actor_login,
+    actor_full_name,
+    actor_role,
+    actor_is_super_admin,
+    device_info,
+    success
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, marker_code, user_id, actor_user_id, actor_login, actor_full_name, actor_role, actor_is_super_admin, device_info, success, scanned_at
 `
 
 	var event models.ScanEvent
 	var dbUserID sql.NullInt64
+	var actorID sql.NullInt64
+	var actorLogin sql.NullString
+	var actorFullName sql.NullString
+	var actorRole sql.NullString
+	var actorIsSuperAdmin bool
 	var dbDeviceInfo sql.NullString
 
-	err := r.db.QueryRow(ctx, query, markerCode, userID, deviceInfo, success).Scan(
+	var actorUserID any
+	var actorLoginValue any
+	var actorFullNameValue any
+	var actorRoleValue any
+	actorIsSuperAdminValue := false
+	if actor != nil {
+		actorUserID = actor.ID
+		actorLoginValue = actor.Login
+		actorFullNameValue = actor.FullName
+		actorRoleValue = actor.Role
+		actorIsSuperAdminValue = actor.IsSuperAdmin
+	}
+
+	err := r.db.QueryRow(ctx, query, markerCode, userID, actorUserID, actorLoginValue, actorFullNameValue, actorRoleValue, actorIsSuperAdminValue, deviceInfo, success).Scan(
 		&event.ID,
 		&event.MarkerCode,
 		&dbUserID,
+		&actorID,
+		&actorLogin,
+		&actorFullName,
+		&actorRole,
+		&actorIsSuperAdmin,
 		&dbDeviceInfo,
 		&event.Success,
 		&event.ScannedAt,
@@ -56,6 +90,18 @@ RETURNING id, marker_code, user_id, device_info, success, scanned_at
 	if dbDeviceInfo.Valid {
 		event.DeviceInfo = &dbDeviceInfo.String
 	}
+	if actorLogin.Valid || actorFullName.Valid || actorRole.Valid || actorID.Valid {
+		summary := models.UserSummary{
+			Login:        actorLogin.String,
+			FullName:     actorFullName.String,
+			Role:         actorRole.String,
+			IsSuperAdmin: actorIsSuperAdmin,
+		}
+		if actorID.Valid {
+			summary.ID = actorID.Int64
+		}
+		event.Actor = &summary
+	}
 
 	return event, nil
 }
@@ -69,13 +115,19 @@ SELECT
     se.id,
     se.marker_code,
     se.user_id,
+    se.actor_user_id,
+    se.actor_login,
+    se.actor_full_name,
+    se.actor_role,
+    se.actor_is_super_admin,
     se.device_info,
     se.success,
     se.scanned_at,
     u.id,
     u.login,
     u.full_name,
-    u.role
+    u.role,
+    COALESCE(u.is_super_admin, FALSE)
 FROM scan_events se
 LEFT JOIN users u ON u.id = se.user_id
 `
@@ -111,16 +163,27 @@ LEFT JOIN users u ON u.id = se.user_id
 	for rows.Next() {
 		var event models.ScanEvent
 		var dbUserID sql.NullInt64
+		var snapshotActorID sql.NullInt64
+		var snapshotActorLogin sql.NullString
+		var snapshotActorFullName sql.NullString
+		var snapshotActorRole sql.NullString
+		var snapshotActorIsSuperAdmin bool
 		var dbDeviceInfo sql.NullString
 		var actorID sql.NullInt64
 		var actorLogin sql.NullString
 		var actorFullName sql.NullString
 		var actorRole sql.NullString
+		var actorIsSuperAdmin bool
 
 		if err := rows.Scan(
 			&event.ID,
 			&event.MarkerCode,
 			&dbUserID,
+			&snapshotActorID,
+			&snapshotActorLogin,
+			&snapshotActorFullName,
+			&snapshotActorRole,
+			&snapshotActorIsSuperAdmin,
 			&dbDeviceInfo,
 			&event.Success,
 			&event.ScannedAt,
@@ -128,6 +191,7 @@ LEFT JOIN users u ON u.id = se.user_id
 			&actorLogin,
 			&actorFullName,
 			&actorRole,
+			&actorIsSuperAdmin,
 		); err != nil {
 			return nil, fmt.Errorf("scan scan event row: %w", err)
 		}
@@ -138,13 +202,34 @@ LEFT JOIN users u ON u.id = se.user_id
 		if dbDeviceInfo.Valid {
 			event.DeviceInfo = &dbDeviceInfo.String
 		}
-		if actorID.Valid {
-			event.Actor = &models.UserSummary{
-				ID:       actorID.Int64,
-				Login:    actorLogin.String,
-				FullName: actorFullName.String,
-				Role:     actorRole.String,
+		if actorID.Valid || snapshotActorID.Valid || actorLogin.Valid || snapshotActorLogin.Valid || actorFullName.Valid || snapshotActorFullName.Valid || actorRole.Valid || snapshotActorRole.Valid {
+			summary := models.UserSummary{
+				IsSuperAdmin: snapshotActorIsSuperAdmin,
 			}
+			if actorID.Valid {
+				summary.ID = actorID.Int64
+			} else if snapshotActorID.Valid {
+				summary.ID = snapshotActorID.Int64
+			}
+			if actorLogin.Valid {
+				summary.Login = actorLogin.String
+			} else {
+				summary.Login = snapshotActorLogin.String
+			}
+			if actorFullName.Valid {
+				summary.FullName = actorFullName.String
+			} else {
+				summary.FullName = snapshotActorFullName.String
+			}
+			if actorRole.Valid {
+				summary.Role = actorRole.String
+			} else {
+				summary.Role = snapshotActorRole.String
+			}
+			if actorID.Valid {
+				summary.IsSuperAdmin = actorIsSuperAdmin
+			}
+			event.Actor = &summary
 		}
 
 		events = append(events, event)

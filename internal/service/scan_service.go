@@ -21,6 +21,7 @@ type ScanEventLogger interface {
 type ScanObjectInput struct {
 	MarkerCode string
 	UserID     *int64
+	Actor      *models.UserSummary
 	DeviceInfo *string
 }
 
@@ -52,6 +53,7 @@ func (s *ScanService) Execute(ctx context.Context, input ScanObjectInput) (model
 			_, _ = s.scanLogger.Create(ctx, CreateScanEventInput{
 				MarkerCode: markerCode,
 				UserID:     input.UserID,
+				Actor:      input.Actor,
 				DeviceInfo: input.DeviceInfo,
 				Success:    &failed,
 			})
@@ -70,6 +72,7 @@ func (s *ScanService) Execute(ctx context.Context, input ScanObjectInput) (model
 	event, err := s.scanLogger.Create(ctx, CreateScanEventInput{
 		MarkerCode: markerCode,
 		UserID:     input.UserID,
+		Actor:      input.Actor,
 		DeviceInfo: input.DeviceInfo,
 		Success:    &success,
 	})
