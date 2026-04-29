@@ -2,8 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,7 +11,6 @@ import (
 )
 
 type OperationHistoryUseCase interface {
-	Create(ctx context.Context, input service.CreateOperationInput) (models.OperationHistory, error)
 	List(ctx context.Context, filter models.OperationHistoryFilter) ([]models.OperationHistory, error)
 }
 
@@ -25,79 +22,15 @@ func NewOperationHistoryHandler(useCase OperationHistoryUseCase) *OperationHisto
 	return &OperationHistoryHandler{useCase: useCase}
 }
 
-type CreateOperationRequest struct {
-	ObjectType    string           `json:"object_type"`
-	ObjectID      int64            `json:"object_id"`
-	OperationType string           `json:"operation_type"`
-	UserID        *int64           `json:"user_id"`
-	Details       *json.RawMessage `json:"details" swaggertype:"object"`
-}
-
-// Create godoc
-// @Summary Создать запись истории операций
-// @Description Сохраняет информацию об операции, выполненной над складским объектом.
-// @Tags Операции
-// @Accept json
-// @Produce json
-// @Param request body CreateOperationRequest true "Данные операции"
-// @Success 201 {object} models.OperationHistory "Операция сохранена"
-// @Failure 400 {object} ErrorResponse "Некорректный запрос"
-// @Failure 500 {object} ErrorResponse "Внутренняя ошибка сервера"
-// @Router /api/v1/operations [post]
-func (h *OperationHistoryHandler) Create(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	authUser, ok := userFromContext(ctx)
-	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "unauthorized",
-		})
-		return
-	}
-
-	var req CreateOperationRequest
-	if err := decodeJSONBody(r.Body, &req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "invalid request body",
-		})
-		return
-	}
-
-	operation, err := h.useCase.Create(ctx, service.CreateOperationInput{
-		ObjectType:    req.ObjectType,
-		ObjectID:      req.ObjectID,
-		OperationType: req.OperationType,
-		UserID:        &authUser.ID,
-		Actor:         service.UserSummaryFromUser(authUser),
-		Details:       req.Details,
-	})
-	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrInvalidOperation):
-			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error": "invalid operation payload",
-			})
-		default:
-			writeJSON(w, http.StatusInternalServerError, map[string]string{
-				"error": "internal server error",
-			})
-		}
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, operation)
-}
-
 // List godoc
-// @Summary Получить историю операций
-// @Description Возвращает последние складские операции.
-// @Tags Операции
+// @Summary Ð ÑŸÐ Ñ•Ð Â»Ð¡Ñ“Ð¡â€¡Ð Ñ‘Ð¡â€šÐ¡ÐŠ Ð Ñ‘Ð¡ÐƒÐ¡â€šÐ Ñ•Ð¡Ð‚Ð Ñ‘Ð¡Ð‹ Ð Ñ•Ð Ñ—Ð ÂµÐ¡Ð‚Ð Â°Ð¡â€ Ð Ñ‘Ð â„–
+// @Description Ð â€™Ð Ñ•Ð Â·Ð Ð†Ð¡Ð‚Ð Â°Ð¡â€°Ð Â°Ð ÂµÐ¡â€š Ð Ñ—Ð Ñ•Ð¡ÐƒÐ Â»Ð ÂµÐ Ò‘Ð Ð…Ð Ñ‘Ð Âµ Ð¡ÐƒÐ Ñ”Ð Â»Ð Â°Ð Ò‘Ð¡ÐƒÐ Ñ”Ð Ñ‘Ð Âµ Ð Ñ•Ð Ñ—Ð ÂµÐ¡Ð‚Ð Â°Ð¡â€ Ð Ñ‘Ð Ñ‘.
+// @Tags Ð Ñ›Ð Ñ—Ð ÂµÐ¡Ð‚Ð Â°Ð¡â€ Ð Ñ‘Ð Ñ‘
 // @Produce json
-// @Param limit query int false "Максимальное число записей; по умолчанию 50, максимум 200"
-// @Success 200 {array} models.OperationHistory "Список операций"
-// @Failure 400 {object} ErrorResponse "Некорректный запрос"
-// @Failure 500 {object} ErrorResponse "Внутренняя ошибка сервера"
+// @Param limit query int false "Ð ÑšÐ Â°Ð Ñ”Ð¡ÐƒÐ Ñ‘Ð Ñ˜Ð Â°Ð Â»Ð¡ÐŠÐ Ð…Ð Ñ•Ð Âµ Ð¡â€¡Ð Ñ‘Ð¡ÐƒÐ Â»Ð Ñ• Ð Â·Ð Â°Ð Ñ—Ð Ñ‘Ð¡ÐƒÐ ÂµÐ â„–; Ð Ñ—Ð Ñ• Ð¡Ñ“Ð Ñ˜Ð Ñ•Ð Â»Ð¡â€¡Ð Â°Ð Ð…Ð Ñ‘Ð¡Ð‹ 50, Ð Ñ˜Ð Â°Ð Ñ”Ð¡ÐƒÐ Ñ‘Ð Ñ˜Ð¡Ñ“Ð Ñ˜ 200"
+// @Success 200 {array} models.OperationHistory "Ð ÐŽÐ Ñ—Ð Ñ‘Ð¡ÐƒÐ Ñ•Ð Ñ” Ð Ñ•Ð Ñ—Ð ÂµÐ¡Ð‚Ð Â°Ð¡â€ Ð Ñ‘Ð â„–"
+// @Failure 400 {object} ErrorResponse "Ð ÑœÐ ÂµÐ Ñ”Ð Ñ•Ð¡Ð‚Ð¡Ð‚Ð ÂµÐ Ñ”Ð¡â€šÐ Ð…Ð¡â€¹Ð â„– Ð Â·Ð Â°Ð Ñ—Ð¡Ð‚Ð Ñ•Ð¡Ðƒ"
+// @Failure 500 {object} ErrorResponse "Ð â€™Ð Ð…Ð¡Ñ“Ð¡â€šÐ¡Ð‚Ð ÂµÐ Ð…Ð Ð…Ð¡ÐÐ¡Ð Ð Ñ•Ð¡â‚¬Ð Ñ‘Ð Â±Ð Ñ”Ð Â° Ð¡ÐƒÐ ÂµÐ¡Ð‚Ð Ð†Ð ÂµÐ¡Ð‚Ð Â°"
 // @Router /api/v1/operations [get]
 func (h *OperationHistoryHandler) List(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -158,11 +91,11 @@ func (h *OperationHistoryHandler) List(w http.ResponseWriter, r *http.Request) {
 	operations, err := h.useCase.List(ctx, filter)
 	if err != nil {
 		switch {
-		case errors.Is(err, service.ErrInvalidLimit):
+		case err == service.ErrInvalidLimit:
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error": "invalid limit",
 			})
-		case errors.Is(err, service.ErrInvalidOperationHistoryFilter):
+		case err == service.ErrInvalidOperationHistoryFilter:
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error": "invalid operation history filter",
 			})
