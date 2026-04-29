@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -44,6 +45,7 @@ type MoveBoxService struct {
 	boxRepo         MoveBoxRepository
 	storageCellRepo MoveBoxStorageCellRepository
 	operationWriter MoveBoxOperationWriter
+	txPool          repository.TxBeginner
 }
 
 func NewMoveBoxService(
@@ -51,12 +53,14 @@ func NewMoveBoxService(
 	boxRepo MoveBoxRepository,
 	storageCellRepo MoveBoxStorageCellRepository,
 	operationWriter MoveBoxOperationWriter,
+	txPool repository.TxBeginner,
 ) *MoveBoxService {
 	return &MoveBoxService{
 		markerRepo:      markerRepo,
 		boxRepo:         boxRepo,
 		storageCellRepo: storageCellRepo,
 		operationWriter: operationWriter,
+		txPool:          txPool,
 	}
 }
 
@@ -68,7 +72,22 @@ func (s *MoveBoxService) Execute(ctx context.Context, input MoveBoxInput) (model
 		return models.MoveBoxResult{}, ErrInvalidMoveBoxPayload
 	}
 
-	boxMarker, err := s.markerRepo.GetByCode(ctx, boxMarkerCode)
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return models.MoveBoxResult{}, fmt.Errorf("begin move box tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+	boxRepo := repository.NewBoxRepositoryWithQuerier(tx)
+	batchRepo := repository.NewBatchRepositoryWithQuerier(tx)
+	storageCellRepo := repository.NewStorageCellRepositoryWithQuerier(tx)
+	operationRepo := repository.NewOperationHistoryRepositoryWithQuerier(tx)
+	operationWriter := NewOperationHistoryService(operationRepo)
+
+	boxMarker, err := markerRepo.GetByCode(ctx, boxMarkerCode)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.MoveBoxResult{}, ErrObjectNotFound
@@ -80,7 +99,7 @@ func (s *MoveBoxService) Execute(ctx context.Context, input MoveBoxInput) (model
 		return models.MoveBoxResult{}, ErrInvalidBoxMarkerType
 	}
 
-	targetCellMarker, err := s.markerRepo.GetByCode(ctx, targetCellMarkerCode)
+	targetCellMarker, err := markerRepo.GetByCode(ctx, targetCellMarkerCode)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.MoveBoxResult{}, ErrObjectNotFound
@@ -92,7 +111,7 @@ func (s *MoveBoxService) Execute(ctx context.Context, input MoveBoxInput) (model
 		return models.MoveBoxResult{}, ErrInvalidStorageCellMarkerType
 	}
 
-	box, err := s.boxRepo.GetByID(ctx, boxMarker.ObjectID)
+	box, err := boxRepo.GetByID(ctx, boxMarker.ObjectID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.MoveBoxResult{}, ErrObjectNotFound
@@ -100,7 +119,7 @@ func (s *MoveBoxService) Execute(ctx context.Context, input MoveBoxInput) (model
 		return models.MoveBoxResult{}, err
 	}
 
-	targetCell, err := s.storageCellRepo.GetByID(ctx, targetCellMarker.ObjectID)
+	targetCell, err := storageCellRepo.GetByID(ctx, targetCellMarker.ObjectID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.MoveBoxResult{}, ErrObjectNotFound
@@ -112,7 +131,11 @@ func (s *MoveBoxService) Execute(ctx context.Context, input MoveBoxInput) (model
 		return models.MoveBoxResult{}, ErrBoxAlreadyInTargetCell
 	}
 
-	if err := s.boxRepo.MoveToStorageCell(ctx, box.ID, targetCell.ID); err != nil {
+	if err := ensureStorageCellIsAvailable(ctx, boxRepo, batchRepo, targetCell.ID); err != nil {
+		return models.MoveBoxResult{}, err
+	}
+
+	if err := boxRepo.MoveToStorageCell(ctx, box.ID, targetCell.ID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.MoveBoxResult{}, ErrObjectNotFound
 		}
@@ -134,7 +157,7 @@ func (s *MoveBoxService) Execute(ctx context.Context, input MoveBoxInput) (model
 
 	rawDetails := json.RawMessage(detailsBytes)
 
-	operation, err := s.operationWriter.Create(ctx, CreateOperationInput{
+	operation, err := operationWriter.Create(ctx, CreateOperationInput{
 		ObjectType:    "box",
 		ObjectID:      box.ID,
 		OperationType: "move_box",
@@ -143,6 +166,10 @@ func (s *MoveBoxService) Execute(ctx context.Context, input MoveBoxInput) (model
 	})
 	if err != nil {
 		return models.MoveBoxResult{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return models.MoveBoxResult{}, fmt.Errorf("commit move box tx: %w", err)
 	}
 
 	locationCode := targetCell.Code

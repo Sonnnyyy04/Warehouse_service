@@ -8,15 +8,18 @@ import (
 	"Warehouse_service/internal/models"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type PalletRepository struct {
-	pool *pgxpool.Pool
+	db Querier
 }
 
-func NewPalletRepository(pool *pgxpool.Pool) *PalletRepository {
-	return &PalletRepository{pool: pool}
+func NewPalletRepository(pool Querier) *PalletRepository {
+	return NewPalletRepositoryWithQuerier(pool)
+}
+
+func NewPalletRepositoryWithQuerier(db Querier) *PalletRepository {
+	return &PalletRepository{db: db}
 }
 
 func (r *PalletRepository) GetByID(ctx context.Context, id int64) (models.Pallet, error) {
@@ -28,7 +31,7 @@ WHERE id = $1
 
 	var pallet models.Pallet
 
-	err := r.pool.QueryRow(ctx, query, id).Scan(
+	err := r.db.QueryRow(ctx, query, id).Scan(
 		&pallet.ID,
 		&pallet.Code,
 		&pallet.Status,
@@ -42,4 +45,45 @@ WHERE id = $1
 	}
 
 	return pallet, nil
+}
+
+func (r *PalletRepository) ListByIDs(ctx context.Context, ids []int64) ([]models.Pallet, error) {
+	if len(ids) == 0 {
+		return []models.Pallet{}, nil
+	}
+
+	const query = `
+SELECT id, code, status, storage_cell_id
+FROM pallets
+WHERE id = ANY($1)
+`
+
+	rows, err := r.db.Query(ctx, query, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list pallets by ids: %w", err)
+	}
+	defer rows.Close()
+
+	pallets := make([]models.Pallet, 0, len(ids))
+
+	for rows.Next() {
+		var pallet models.Pallet
+
+		if err := rows.Scan(
+			&pallet.ID,
+			&pallet.Code,
+			&pallet.Status,
+			&pallet.StorageCellID,
+		); err != nil {
+			return nil, fmt.Errorf("scan pallet by id row: %w", err)
+		}
+
+		pallets = append(pallets, pallet)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pallet by ids rows: %w", err)
+	}
+
+	return pallets, nil
 }

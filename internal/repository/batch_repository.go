@@ -95,6 +95,51 @@ LIMIT $1
 	return batches, nil
 }
 
+func (r *BatchRepository) ListByIDs(ctx context.Context, ids []int64) ([]models.Batch, error) {
+	if len(ids) == 0 {
+		return []models.Batch{}, nil
+	}
+
+	const query = `
+SELECT id, code, product_id, quantity, status, box_id, pallet_id, storage_cell_id
+FROM batches
+WHERE id = ANY($1)
+`
+
+	rows, err := r.db.Query(ctx, query, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list batches by ids: %w", err)
+	}
+	defer rows.Close()
+
+	batches := make([]models.Batch, 0, len(ids))
+
+	for rows.Next() {
+		var batch models.Batch
+
+		if err := rows.Scan(
+			&batch.ID,
+			&batch.Code,
+			&batch.ProductID,
+			&batch.Quantity,
+			&batch.Status,
+			&batch.BoxID,
+			&batch.PalletID,
+			&batch.StorageCellID,
+		); err != nil {
+			return nil, fmt.Errorf("scan batch by id row: %w", err)
+		}
+
+		batches = append(batches, batch)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate batch by ids rows: %w", err)
+	}
+
+	return batches, nil
+}
+
 func (r *BatchRepository) HasOtherProductInBox(
 	ctx context.Context,
 	boxID int64,

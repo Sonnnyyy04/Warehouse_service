@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -52,6 +53,7 @@ type MoveBatchService struct {
 	boxRepo         MoveBatchBoxRepository
 	storageCellRepo MoveBatchStorageCellRepository
 	operationWriter MoveBatchOperationWriter
+	txPool          repository.TxBeginner
 }
 
 func NewMoveBatchService(
@@ -60,6 +62,7 @@ func NewMoveBatchService(
 	boxRepo MoveBatchBoxRepository,
 	storageCellRepo MoveBatchStorageCellRepository,
 	operationWriter MoveBatchOperationWriter,
+	txPool repository.TxBeginner,
 ) *MoveBatchService {
 	return &MoveBatchService{
 		markerRepo:      markerRepo,
@@ -67,6 +70,7 @@ func NewMoveBatchService(
 		boxRepo:         boxRepo,
 		storageCellRepo: storageCellRepo,
 		operationWriter: operationWriter,
+		txPool:          txPool,
 	}
 }
 
@@ -78,7 +82,22 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 		return models.MoveBatchResult{}, ErrInvalidMoveBatchPayload
 	}
 
-	batchMarker, err := s.markerRepo.GetByCode(ctx, batchMarkerCode)
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return models.MoveBatchResult{}, fmt.Errorf("begin move batch tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+	batchRepo := repository.NewBatchRepositoryWithQuerier(tx)
+	boxRepo := repository.NewBoxRepositoryWithQuerier(tx)
+	storageCellRepo := repository.NewStorageCellRepositoryWithQuerier(tx)
+	operationRepo := repository.NewOperationHistoryRepositoryWithQuerier(tx)
+	operationWriter := NewOperationHistoryService(operationRepo)
+
+	batchMarker, err := markerRepo.GetByCode(ctx, batchMarkerCode)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.MoveBatchResult{}, ErrObjectNotFound
@@ -90,7 +109,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 		return models.MoveBatchResult{}, ErrInvalidBatchMarkerType
 	}
 
-	targetMarker, err := s.markerRepo.GetByCode(ctx, targetMarkerCode)
+	targetMarker, err := markerRepo.GetByCode(ctx, targetMarkerCode)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.MoveBatchResult{}, ErrObjectNotFound
@@ -102,7 +121,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 		return models.MoveBatchResult{}, ErrInvalidBatchTargetMarkerType
 	}
 
-	batch, err := s.batchRepo.GetByID(ctx, batchMarker.ObjectID)
+	batch, err := batchRepo.GetByID(ctx, batchMarker.ObjectID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.MoveBatchResult{}, ErrObjectNotFound
@@ -118,7 +137,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 
 	switch targetMarker.ObjectType {
 	case "box":
-		box, err := s.boxRepo.GetByID(ctx, targetMarker.ObjectID)
+		box, err := boxRepo.GetByID(ctx, targetMarker.ObjectID)
 		if err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.MoveBatchResult{}, ErrObjectNotFound
@@ -130,7 +149,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 			return models.MoveBatchResult{}, ErrBatchAlreadyInTargetBox
 		}
 
-		hasMixedProducts, err := s.batchRepo.HasOtherProductInBox(ctx, box.ID, batch.ProductID, &batch.ID)
+		hasMixedProducts, err := batchRepo.HasOtherProductInBox(ctx, box.ID, batch.ProductID, &batch.ID)
 		if err != nil {
 			return models.MoveBatchResult{}, err
 		}
@@ -138,7 +157,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 			return models.MoveBatchResult{}, ErrMixedBoxProducts
 		}
 
-		if err := s.batchRepo.MoveToBox(ctx, batch.ID, box.ID); err != nil {
+		if err := batchRepo.MoveToBox(ctx, batch.ID, box.ID); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.MoveBatchResult{}, ErrObjectNotFound
 			}
@@ -147,7 +166,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 
 		parentCode = &box.Code
 		if box.StorageCellID != nil {
-			cell, err := s.storageCellRepo.GetByID(ctx, *box.StorageCellID)
+			cell, err := storageCellRepo.GetByID(ctx, *box.StorageCellID)
 			if err == nil {
 				locationCode = &cell.Code
 			}
@@ -171,7 +190,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 		}
 
 	case "storage_cell":
-		cell, err := s.storageCellRepo.GetByID(ctx, targetMarker.ObjectID)
+		cell, err := storageCellRepo.GetByID(ctx, targetMarker.ObjectID)
 		if err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.MoveBatchResult{}, ErrObjectNotFound
@@ -183,7 +202,11 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 			return models.MoveBatchResult{}, ErrBatchAlreadyInTargetCell
 		}
 
-		if err := s.batchRepo.MoveToStorageCell(ctx, batch.ID, cell.ID); err != nil {
+		if err := ensureStorageCellIsAvailable(ctx, boxRepo, batchRepo, cell.ID); err != nil {
+			return models.MoveBatchResult{}, err
+		}
+
+		if err := batchRepo.MoveToStorageCell(ctx, batch.ID, cell.ID); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.MoveBatchResult{}, ErrObjectNotFound
 			}
@@ -210,7 +233,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 
 	rawDetails := json.RawMessage(detailsBytes)
 
-	operation, err := s.operationWriter.Create(ctx, CreateOperationInput{
+	operation, err := operationWriter.Create(ctx, CreateOperationInput{
 		ObjectType:    "batch",
 		ObjectID:      batch.ID,
 		OperationType: "move_batch",
@@ -219,6 +242,10 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 	})
 	if err != nil {
 		return models.MoveBatchResult{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return models.MoveBatchResult{}, fmt.Errorf("commit move batch tx: %w", err)
 	}
 
 	quantity := batch.Quantity

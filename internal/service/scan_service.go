@@ -49,15 +49,12 @@ func (s *ScanService) Execute(ctx context.Context, input ScanObjectInput) (model
 	if err != nil {
 		if errors.Is(err, ErrObjectNotFound) {
 			failed := false
-			_, logErr := s.scanLogger.Create(ctx, CreateScanEventInput{
+			_, _ = s.scanLogger.Create(ctx, CreateScanEventInput{
 				MarkerCode: markerCode,
 				UserID:     input.UserID,
 				DeviceInfo: input.DeviceInfo,
 				Success:    &failed,
 			})
-			if logErr != nil {
-				return models.ScanResult{}, logErr
-			}
 
 			return models.ScanResult{}, ErrObjectNotFound
 		}
@@ -77,7 +74,9 @@ func (s *ScanService) Execute(ctx context.Context, input ScanObjectInput) (model
 		Success:    &success,
 	})
 	if err != nil {
-		return models.ScanResult{}, err
+		return models.ScanResult{
+			Object: objectCard,
+		}, nil
 	}
 
 	return models.ScanResult{

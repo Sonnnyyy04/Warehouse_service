@@ -7,16 +7,18 @@ import (
 	"strings"
 
 	"Warehouse_service/internal/models"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ScanEventRepository struct {
-	pool *pgxpool.Pool
+	db Querier
 }
 
-func NewScanEventRepository(pool *pgxpool.Pool) *ScanEventRepository {
-	return &ScanEventRepository{pool: pool}
+func NewScanEventRepository(pool Querier) *ScanEventRepository {
+	return NewScanEventRepositoryWithQuerier(pool)
+}
+
+func NewScanEventRepositoryWithQuerier(db Querier) *ScanEventRepository {
+	return &ScanEventRepository{db: db}
 }
 
 func (r *ScanEventRepository) Create(
@@ -36,7 +38,7 @@ RETURNING id, marker_code, user_id, device_info, success, scanned_at
 	var dbUserID sql.NullInt64
 	var dbDeviceInfo sql.NullString
 
-	err := r.pool.QueryRow(ctx, query, markerCode, userID, deviceInfo, success).Scan(
+	err := r.db.QueryRow(ctx, query, markerCode, userID, deviceInfo, success).Scan(
 		&event.ID,
 		&event.MarkerCode,
 		&dbUserID,
@@ -98,7 +100,7 @@ LEFT JOIN users u ON u.id = se.user_id
 	args = append(args, filter.Limit)
 	query += fmt.Sprintf("ORDER BY se.scanned_at DESC, se.id DESC\nLIMIT $%d\n", len(args))
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list scan events: %w", err)
 	}

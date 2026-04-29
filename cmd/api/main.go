@@ -16,6 +16,7 @@ import (
 	"Warehouse_service/internal/config"
 	"Warehouse_service/internal/handler"
 )
+
 func main() {
 	cfg := config.MustLoad()
 
@@ -75,6 +76,7 @@ func main() {
 		boxRepo,
 		storageCellRepo,
 		operationHistoryService,
+		pool,
 	)
 	moveBatchService := service.NewMoveBatchService(
 		markerRepo,
@@ -82,6 +84,7 @@ func main() {
 		boxRepo,
 		storageCellRepo,
 		operationHistoryService,
+		pool,
 	)
 
 	objectHandler := handler.NewObjectHandler(objectService)

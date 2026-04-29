@@ -8,16 +8,18 @@ import (
 	"strings"
 
 	"Warehouse_service/internal/models"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type OperationHistoryRepository struct {
-	pool *pgxpool.Pool
+	db Querier
 }
 
-func NewOperationHistoryRepository(pool *pgxpool.Pool) *OperationHistoryRepository {
-	return &OperationHistoryRepository{pool: pool}
+func NewOperationHistoryRepository(pool Querier) *OperationHistoryRepository {
+	return NewOperationHistoryRepositoryWithQuerier(pool)
+}
+
+func NewOperationHistoryRepositoryWithQuerier(db Querier) *OperationHistoryRepository {
+	return &OperationHistoryRepository{db: db}
 }
 
 func (r *OperationHistoryRepository) Create(
@@ -38,7 +40,7 @@ RETURNING id, object_type::text, object_id, operation_type, user_id, details, cr
 	var dbUserID sql.NullInt64
 	var dbDetails []byte
 
-	err := r.pool.QueryRow(ctx, query, objectType, objectID, operationType, userID, details).Scan(
+	err := r.db.QueryRow(ctx, query, objectType, objectID, operationType, userID, details).Scan(
 		&operation.ID,
 		&operation.ObjectType,
 		&operation.ObjectID,
@@ -105,7 +107,7 @@ LEFT JOIN users u ON u.id = oh.user_id
 	args = append(args, filter.Limit)
 	query += fmt.Sprintf("ORDER BY oh.created_at DESC, oh.id DESC\nLIMIT $%d\n", len(args))
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list operation history: %w", err)
 	}

@@ -442,14 +442,29 @@ func (s *AdminService) CreateStorageCell(ctx context.Context, input CreateStorag
 		zoneValue = &zone
 	}
 
-	cell, err := s.storageCellRepo.Create(ctx, code, name, zoneValue, "active")
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return models.StorageCell{}, models.Marker{}, fmt.Errorf("begin create storage cell tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	storageCellRepo := repository.NewStorageCellRepositoryWithQuerier(tx)
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+
+	cell, err := storageCellRepo.Create(ctx, code, name, zoneValue, "active")
 	if err != nil {
 		return models.StorageCell{}, models.Marker{}, err
 	}
 
-	marker, err := s.markerRepo.Create(ctx, buildMarkerCode("storage_cell", cell.ID), "storage_cell", cell.ID)
+	marker, err := markerRepo.Create(ctx, buildMarkerCode("storage_cell", cell.ID), "storage_cell", cell.ID)
 	if err != nil {
 		return models.StorageCell{}, models.Marker{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return models.StorageCell{}, models.Marker{}, fmt.Errorf("commit create storage cell tx: %w", err)
 	}
 
 	return cell, marker, nil
@@ -530,27 +545,44 @@ func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (mod
 		return models.Box{}, models.Marker{}, ErrInvalidAdminInput
 	}
 
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return models.Box{}, models.Marker{}, fmt.Errorf("begin create box tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	storageCellRepo := repository.NewStorageCellRepositoryWithQuerier(tx)
+	boxRepo := repository.NewBoxRepositoryWithQuerier(tx)
+	batchRepo := repository.NewBatchRepositoryWithQuerier(tx)
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+
 	if input.StorageCellID != nil {
-		if _, err := s.storageCellRepo.GetByID(ctx, *input.StorageCellID); err != nil {
+		if _, err := storageCellRepo.GetByID(ctx, *input.StorageCellID); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.Box{}, models.Marker{}, ErrInvalidAdminReference
 			}
 			return models.Box{}, models.Marker{}, err
 		}
 
-		if err := ensureStorageCellIsAvailable(ctx, s.boxRepo, s.batchRepo, *input.StorageCellID); err != nil {
+		if err := ensureStorageCellIsAvailable(ctx, boxRepo, batchRepo, *input.StorageCellID); err != nil {
 			return models.Box{}, models.Marker{}, err
 		}
 	}
 
-	box, err := s.boxRepo.Create(ctx, code, "active", input.StorageCellID)
+	box, err := boxRepo.Create(ctx, code, "active", input.StorageCellID)
 	if err != nil {
 		return models.Box{}, models.Marker{}, err
 	}
 
-	marker, err := s.markerRepo.Create(ctx, buildMarkerCode("box", box.ID), "box", box.ID)
+	marker, err := markerRepo.Create(ctx, buildMarkerCode("box", box.ID), "box", box.ID)
 	if err != nil {
 		return models.Box{}, models.Marker{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return models.Box{}, models.Marker{}, fmt.Errorf("commit create box tx: %w", err)
 	}
 
 	return box, marker, nil
@@ -648,7 +680,21 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 		return models.Batch{}, models.Marker{}, ErrConflictingBatchTarget
 	}
 
-	if _, err := s.productRepo.GetByID(ctx, input.ProductID); err != nil {
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return models.Batch{}, models.Marker{}, fmt.Errorf("begin create batch tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	productRepo := repository.NewProductRepositoryWithQuerier(tx)
+	storageCellRepo := repository.NewStorageCellRepositoryWithQuerier(tx)
+	boxRepo := repository.NewBoxRepositoryWithQuerier(tx)
+	batchRepo := repository.NewBatchRepositoryWithQuerier(tx)
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+
+	if _, err := productRepo.GetByID(ctx, input.ProductID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.Batch{}, models.Marker{}, ErrInvalidAdminReference
 		}
@@ -656,14 +702,14 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 	}
 
 	if input.BoxID != nil {
-		if _, err := s.boxRepo.GetByID(ctx, *input.BoxID); err != nil {
+		if _, err := boxRepo.GetByID(ctx, *input.BoxID); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.Batch{}, models.Marker{}, ErrInvalidAdminReference
 			}
 			return models.Batch{}, models.Marker{}, err
 		}
 
-		hasMixedProducts, err := s.batchRepo.HasOtherProductInBox(ctx, *input.BoxID, input.ProductID, nil)
+		hasMixedProducts, err := batchRepo.HasOtherProductInBox(ctx, *input.BoxID, input.ProductID, nil)
 		if err != nil {
 			return models.Batch{}, models.Marker{}, err
 		}
@@ -673,19 +719,19 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 	}
 
 	if input.StorageCellID != nil {
-		if _, err := s.storageCellRepo.GetByID(ctx, *input.StorageCellID); err != nil {
+		if _, err := storageCellRepo.GetByID(ctx, *input.StorageCellID); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.Batch{}, models.Marker{}, ErrInvalidAdminReference
 			}
 			return models.Batch{}, models.Marker{}, err
 		}
 
-		if err := ensureStorageCellIsAvailable(ctx, s.boxRepo, s.batchRepo, *input.StorageCellID); err != nil {
+		if err := ensureStorageCellIsAvailable(ctx, boxRepo, batchRepo, *input.StorageCellID); err != nil {
 			return models.Batch{}, models.Marker{}, err
 		}
 	}
 
-	batch, err := s.batchRepo.Create(
+	batch, err := batchRepo.Create(
 		ctx,
 		code,
 		input.ProductID,
@@ -699,9 +745,13 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 		return models.Batch{}, models.Marker{}, err
 	}
 
-	marker, err := s.markerRepo.Create(ctx, buildMarkerCode("batch", batch.ID), "batch", batch.ID)
+	marker, err := markerRepo.Create(ctx, buildMarkerCode("batch", batch.ID), "batch", batch.ID)
 	if err != nil {
 		return models.Batch{}, models.Marker{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return models.Batch{}, models.Marker{}, fmt.Errorf("commit create batch tx: %w", err)
 	}
 
 	return batch, marker, nil

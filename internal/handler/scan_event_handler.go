@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -56,7 +55,7 @@ func (h *ScanEventHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CreateScanEventRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "invalid request body",
 		})

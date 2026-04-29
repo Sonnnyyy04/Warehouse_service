@@ -122,6 +122,50 @@ LIMIT $1
 	return products, nil
 }
 
+func (r *ProductRepository) ListByIDs(ctx context.Context, ids []int64) ([]models.Product, error) {
+	if len(ids) == 0 {
+		return []models.Product{}, nil
+	}
+
+	const query = `
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+FROM products p
+LEFT JOIN batches b ON b.product_id = p.id
+WHERE p.id = ANY($1)
+GROUP BY p.id, p.sku, p.name, p.unit
+`
+
+	rows, err := r.db.Query(ctx, query, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list products by ids: %w", err)
+	}
+	defer rows.Close()
+
+	products := make([]models.Product, 0, len(ids))
+
+	for rows.Next() {
+		var product models.Product
+
+		if err := rows.Scan(
+			&product.ID,
+			&product.SKU,
+			&product.Name,
+			&product.Unit,
+			&product.TotalQuantity,
+		); err != nil {
+			return nil, fmt.Errorf("scan product by id row: %w", err)
+		}
+
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate product by ids rows: %w", err)
+	}
+
+	return products, nil
+}
+
 func (r *ProductRepository) Create(ctx context.Context, sku, name, unit string) (models.Product, error) {
 	const query = `
 INSERT INTO products (sku, name, unit)

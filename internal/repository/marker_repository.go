@@ -114,7 +114,7 @@ WHERE marker_code = ANY($1)
 		args = append(args, objectType)
 	}
 
-	query += "ORDER BY id"
+	query += "ORDER BY array_position($1::text[], marker_code), id"
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

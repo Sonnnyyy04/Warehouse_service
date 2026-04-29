@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -171,7 +170,7 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 
 	var req createProductRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -191,7 +190,7 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 		case errors.Is(err, service.ErrConflictingBatchTarget):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "initial quantity requires exactly one target: box_code or storage_cell_code"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "box or storage cell not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "box or storage cell not found"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty for a new product"})
 		case errors.Is(err, service.ErrMixedBoxProducts):
@@ -213,7 +212,7 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *AdminHandler) ImportProductsAPI(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
@@ -249,7 +248,7 @@ func (h *AdminHandler) UpdateProductAPI(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 
 	var req updateProductRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -265,7 +264,7 @@ func (h *AdminHandler) UpdateProductAPI(w http.ResponseWriter, r *http.Request) 
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sku and name are required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "product not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "product not found"})
 		case errors.Is(err, service.ErrAdminProductExists):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "product name already exists"})
 		case errors.Is(err, repository.ErrConflict), errors.Is(err, service.ErrAdminConflict):
@@ -284,7 +283,7 @@ func (h *AdminHandler) DeleteProductAPI(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 
 	var req deleteEntityRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -294,7 +293,7 @@ func (h *AdminHandler) DeleteProductAPI(w http.ResponseWriter, r *http.Request) 
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid product_id"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "product not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "product not found"})
 		case errors.Is(err, service.ErrAdminProductHasBatches):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "product cannot be deleted while batches exist"})
 		default:
@@ -339,7 +338,7 @@ func (h *AdminHandler) CreateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 	defer cancel()
 
 	var req createStorageCellRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -374,7 +373,7 @@ func (h *AdminHandler) UpdateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 	defer cancel()
 
 	var req updateStorageCellRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -390,7 +389,7 @@ func (h *AdminHandler) UpdateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "storage cell not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "storage cell not found"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell code already exists"})
 		default:
@@ -407,7 +406,7 @@ func (h *AdminHandler) DeleteStorageCellAPI(w http.ResponseWriter, r *http.Reque
 	defer cancel()
 
 	var req deleteEntityRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -417,7 +416,7 @@ func (h *AdminHandler) DeleteStorageCellAPI(w http.ResponseWriter, r *http.Reque
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid storage_cell_id"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "storage cell not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "storage cell not found"})
 		case errors.Is(err, service.ErrAdminStorageCellBusy):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell cannot be deleted while it contains boxes or batches"})
 		default:
@@ -462,7 +461,7 @@ func (h *AdminHandler) CreateBoxAPI(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var req createBoxRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -475,6 +474,8 @@ func (h *AdminHandler) CreateBoxAPI(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "storage cell not found"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, repository.ErrConflict):
@@ -496,7 +497,7 @@ func (h *AdminHandler) UpdateBoxAPI(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var req updateBoxRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -511,7 +512,7 @@ func (h *AdminHandler) UpdateBoxAPI(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "box or storage cell not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "box or storage cell not found"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, repository.ErrConflict):
@@ -530,7 +531,7 @@ func (h *AdminHandler) DeleteBoxAPI(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var req deleteEntityRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -540,7 +541,7 @@ func (h *AdminHandler) DeleteBoxAPI(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid box_id"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "box not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "box not found"})
 		case errors.Is(err, service.ErrAdminBoxNotEmpty):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "box cannot be deleted while batches exist"})
 		default:
@@ -585,7 +586,7 @@ func (h *AdminHandler) CreateBatchAPI(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var req createBatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -608,7 +609,7 @@ func (h *AdminHandler) CreateBatchAPI(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrMixedBoxProducts):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "product, box or storage cell not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "product, box or storage cell not found"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "batch code already exists"})
 		default:
@@ -628,7 +629,7 @@ func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var req updateBatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -652,7 +653,7 @@ func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrMixedBoxProducts):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "product, box or storage cell not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "product, box or storage cell not found"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "batch code already exists"})
 		default:
@@ -669,7 +670,7 @@ func (h *AdminHandler) DeleteBatchAPI(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var req deleteEntityRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -679,7 +680,7 @@ func (h *AdminHandler) DeleteBatchAPI(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid batch_id"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "batch not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "batch not found"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
@@ -728,7 +729,7 @@ func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req createWorkerRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -744,7 +745,7 @@ func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login, full_name, role and password are required"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login, full_name and password are required; role must be admin or worker"})
 		case errors.Is(err, service.ErrInvalidAdminLogin):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login must contain only latin letters"})
 		case errors.Is(err, service.ErrInvalidAdminPassword):
@@ -773,7 +774,7 @@ func (h *AdminHandler) DeleteWorkerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req deleteWorkerRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -783,7 +784,7 @@ func (h *AdminHandler) DeleteWorkerAPI(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user_id"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
 		case errors.Is(err, service.ErrAdminSelfDelete):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot delete current user"})
 		case errors.Is(err, service.ErrAdminPermissionDenied):

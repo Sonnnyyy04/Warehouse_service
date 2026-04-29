@@ -116,6 +116,48 @@ LIMIT $1
 	return cells, nil
 }
 
+func (r *StorageCellRepository) ListByIDs(ctx context.Context, ids []int64) ([]models.StorageCell, error) {
+	if len(ids) == 0 {
+		return []models.StorageCell{}, nil
+	}
+
+	const query = `
+SELECT id, code, name, zone, status
+FROM storage_cells
+WHERE id = ANY($1)
+`
+
+	rows, err := r.db.Query(ctx, query, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list storage cells by ids: %w", err)
+	}
+	defer rows.Close()
+
+	cells := make([]models.StorageCell, 0, len(ids))
+
+	for rows.Next() {
+		var cell models.StorageCell
+
+		if err := rows.Scan(
+			&cell.ID,
+			&cell.Code,
+			&cell.Name,
+			&cell.Zone,
+			&cell.Status,
+		); err != nil {
+			return nil, fmt.Errorf("scan storage cell by id row: %w", err)
+		}
+
+		cells = append(cells, cell)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate storage cell by ids rows: %w", err)
+	}
+
+	return cells, nil
+}
+
 func (r *StorageCellRepository) Create(ctx context.Context, code, name string, zone *string, status string) (models.StorageCell, error) {
 	const query = `
 INSERT INTO storage_cells (code, name, zone, status)

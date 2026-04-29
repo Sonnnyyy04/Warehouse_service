@@ -116,6 +116,48 @@ LIMIT $1
 	return boxes, nil
 }
 
+func (r *BoxRepository) ListByIDs(ctx context.Context, ids []int64) ([]models.Box, error) {
+	if len(ids) == 0 {
+		return []models.Box{}, nil
+	}
+
+	const query = `
+SELECT id, code, status, pallet_id, storage_cell_id
+FROM boxes
+WHERE id = ANY($1)
+`
+
+	rows, err := r.db.Query(ctx, query, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list boxes by ids: %w", err)
+	}
+	defer rows.Close()
+
+	boxes := make([]models.Box, 0, len(ids))
+
+	for rows.Next() {
+		var box models.Box
+
+		if err := rows.Scan(
+			&box.ID,
+			&box.Code,
+			&box.Status,
+			&box.PalletID,
+			&box.StorageCellID,
+		); err != nil {
+			return nil, fmt.Errorf("scan box by id row: %w", err)
+		}
+
+		boxes = append(boxes, box)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate box by ids rows: %w", err)
+	}
+
+	return boxes, nil
+}
+
 func (r *BoxRepository) Create(ctx context.Context, code, status string, storageCellID *int64) (models.Box, error) {
 	const query = `
 INSERT INTO boxes (code, status, storage_cell_id)

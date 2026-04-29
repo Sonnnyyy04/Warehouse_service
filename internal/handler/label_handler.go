@@ -96,7 +96,7 @@ func (h *LabelHandler) RenderQR(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LabelHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
 	objectType := r.URL.Query().Get("object_type")

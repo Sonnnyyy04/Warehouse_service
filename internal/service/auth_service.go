@@ -36,6 +36,7 @@ type AuthService struct {
 	userRepo        AuthUserRepository
 	sessionRepo     AuthSessionRepository
 	sessionDuration time.Duration
+	touchInterval   time.Duration
 }
 
 func NewAuthService(userRepo AuthUserRepository, sessionRepo AuthSessionRepository) *AuthService {
@@ -43,6 +44,7 @@ func NewAuthService(userRepo AuthUserRepository, sessionRepo AuthSessionReposito
 		userRepo:        userRepo,
 		sessionRepo:     sessionRepo,
 		sessionDuration: 30 * 24 * time.Hour,
+		touchInterval:   5 * time.Minute,
 	}
 }
 
@@ -105,7 +107,10 @@ func (s *AuthService) Authenticate(ctx context.Context, token string) (models.Us
 		return models.User{}, models.UserSession{}, err
 	}
 
-	_ = s.sessionRepo.Touch(ctx, token, time.Now())
+	now := time.Now()
+	if now.Sub(session.LastSeenAt) >= s.touchInterval {
+		_ = s.sessionRepo.Touch(ctx, token, now)
+	}
 
 	return sanitizeUser(user), session, nil
 }
