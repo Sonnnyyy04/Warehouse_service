@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"Warehouse_service/internal/models"
@@ -18,14 +19,17 @@ type MarkerRepository interface {
 
 type StorageCellRepository interface {
 	GetByID(ctx context.Context, id int64) (models.StorageCell, error)
+	GetContentStats(ctx context.Context, storageCellID int64) (models.ObjectContentStats, error)
 }
 
 type PalletRepository interface {
 	GetByID(ctx context.Context, id int64) (models.Pallet, error)
+	GetContentStats(ctx context.Context, palletID int64) (models.ObjectContentStats, error)
 }
 
 type BoxRepository interface {
 	GetByID(ctx context.Context, id int64) (models.Box, error)
+	GetContentStats(ctx context.Context, boxID int64) (models.ObjectContentStats, error)
 }
 
 type ProductRepository interface {
@@ -103,15 +107,28 @@ func (s *ObjectService) buildStorageCellCard(ctx context.Context, marker models.
 	}
 
 	locationCode := cell.Code
+	locationType := "storage_cell"
+	stats, err := s.storageCellRepo.GetContentStats(ctx, cell.ID)
+	if err != nil {
+		return models.ObjectCard{}, err
+	}
+	contentSummary := buildContentSummary(stats)
 
 	return models.ObjectCard{
-		MarkerCode:   marker.MarkerCode,
-		ObjectType:   marker.ObjectType,
-		ObjectID:     cell.ID,
-		Code:         cell.Code,
-		Name:         cell.Name,
-		Status:       cell.Status,
-		LocationCode: &locationCode,
+		MarkerCode:     marker.MarkerCode,
+		ObjectType:     marker.ObjectType,
+		ObjectID:       cell.ID,
+		Code:           cell.Code,
+		Name:           cell.Name,
+		Status:         cell.Status,
+		LocationCode:   &locationCode,
+		LocationType:   &locationType,
+		ContentSummary: &contentSummary,
+		PalletsCount:   int32Ptr(stats.PalletsCount),
+		BoxesCount:     int32Ptr(stats.BoxesCount),
+		BatchesCount:   int32Ptr(stats.BatchesCount),
+		ProductsCount:  int32Ptr(stats.ProductsCount),
+		TotalQuantity:  int32Ptr(stats.TotalQuantity),
 	}, nil
 }
 
@@ -125,21 +142,39 @@ func (s *ObjectService) buildPalletCard(ctx context.Context, marker models.Marke
 	}
 
 	var locationCode *string
+	var locationType *string
 	if pallet.StorageCellID != nil {
 		cell, err := s.storageCellRepo.GetByID(ctx, *pallet.StorageCellID)
 		if err == nil {
 			locationCode = &cell.Code
+			locationType = stringPtr("storage_cell")
 		}
 	}
 
+	stats, err := s.palletRepo.GetContentStats(ctx, pallet.ID)
+	if err != nil {
+		return models.ObjectCard{}, err
+	}
+	contentSummary := buildContentSummary(stats)
+
 	return models.ObjectCard{
-		MarkerCode:   marker.MarkerCode,
-		ObjectType:   marker.ObjectType,
-		ObjectID:     pallet.ID,
-		Code:         pallet.Code,
-		Name:         pallet.Code,
-		Status:       pallet.Status,
-		LocationCode: locationCode,
+		MarkerCode:     marker.MarkerCode,
+		ObjectType:     marker.ObjectType,
+		ObjectID:       pallet.ID,
+		Code:           pallet.Code,
+		Name:           pallet.Code,
+		Status:         pallet.Status,
+		LocationCode:   locationCode,
+		LocationType:   locationType,
+		ProductSKU:     stats.ProductSKU,
+		ProductName:    stats.ProductName,
+		Unit:           stats.ProductUnit,
+		ContentSummary: &contentSummary,
+		BoxesCount:     int32Ptr(stats.BoxesCount),
+		BatchesCount:   int32Ptr(stats.BatchesCount),
+		ProductsCount:  int32Ptr(stats.ProductsCount),
+		TotalQuantity:  int32Ptr(stats.TotalQuantity),
+		Quantity:       int32Ptr(stats.TotalQuantity),
 	}, nil
 }
 
@@ -153,12 +188,15 @@ func (s *ObjectService) buildBoxCard(ctx context.Context, marker models.Marker) 
 	}
 
 	var locationCode *string
+	var locationType *string
 	var parentCode *string
+	var parentType *string
 
 	if box.StorageCellID != nil {
 		cell, err := s.storageCellRepo.GetByID(ctx, *box.StorageCellID)
 		if err == nil {
 			locationCode = &cell.Code
+			locationType = stringPtr("storage_cell")
 		}
 	}
 
@@ -166,24 +204,42 @@ func (s *ObjectService) buildBoxCard(ctx context.Context, marker models.Marker) 
 		pallet, err := s.palletRepo.GetByID(ctx, *box.PalletID)
 		if err == nil {
 			parentCode = &pallet.Code
+			parentType = stringPtr("pallet")
 			if locationCode == nil && pallet.StorageCellID != nil {
 				cell, err := s.storageCellRepo.GetByID(ctx, *pallet.StorageCellID)
 				if err == nil {
 					locationCode = &cell.Code
+					locationType = stringPtr("storage_cell")
 				}
 			}
 		}
 	}
 
+	stats, err := s.boxRepo.GetContentStats(ctx, box.ID)
+	if err != nil {
+		return models.ObjectCard{}, err
+	}
+	contentSummary := buildContentSummary(stats)
+
 	return models.ObjectCard{
-		MarkerCode:   marker.MarkerCode,
-		ObjectType:   marker.ObjectType,
-		ObjectID:     box.ID,
-		Code:         box.Code,
-		Name:         box.Code,
-		Status:       box.Status,
-		LocationCode: locationCode,
-		ParentCode:   parentCode,
+		MarkerCode:     marker.MarkerCode,
+		ObjectType:     marker.ObjectType,
+		ObjectID:       box.ID,
+		Code:           box.Code,
+		Name:           firstNonEmptyString(stats.ProductName, box.Code),
+		Status:         box.Status,
+		LocationCode:   locationCode,
+		LocationType:   locationType,
+		ParentCode:     parentCode,
+		ParentType:     parentType,
+		ProductSKU:     stats.ProductSKU,
+		ProductName:    stats.ProductName,
+		Unit:           stats.ProductUnit,
+		ContentSummary: &contentSummary,
+		BatchesCount:   int32Ptr(stats.BatchesCount),
+		ProductsCount:  int32Ptr(stats.ProductsCount),
+		TotalQuantity:  int32Ptr(stats.TotalQuantity),
+		Quantity:       int32Ptr(stats.TotalQuantity),
 	}, nil
 }
 
@@ -197,12 +253,17 @@ func (s *ObjectService) buildProductCard(ctx context.Context, marker models.Mark
 	}
 
 	return models.ObjectCard{
-		MarkerCode: marker.MarkerCode,
-		ObjectType: marker.ObjectType,
-		ObjectID:   product.ID,
-		Code:       product.SKU,
-		Name:       product.Name,
-		Status:     "active",
+		MarkerCode:    marker.MarkerCode,
+		ObjectType:    marker.ObjectType,
+		ObjectID:      product.ID,
+		Code:          product.SKU,
+		Name:          product.Name,
+		Status:        "active",
+		Quantity:      int32Ptr(product.TotalQuantity),
+		Unit:          &product.Unit,
+		ProductSKU:    &product.SKU,
+		ProductName:   &product.Name,
+		TotalQuantity: int32Ptr(product.TotalQuantity),
 	}, nil
 }
 
@@ -216,12 +277,15 @@ func (s *ObjectService) buildBatchCard(ctx context.Context, marker models.Marker
 	}
 
 	var locationCode *string
+	var locationType *string
 	var parentCode *string
+	var parentType *string
 
 	if batch.StorageCellID != nil {
 		cell, err := s.storageCellRepo.GetByID(ctx, *batch.StorageCellID)
 		if err == nil {
 			locationCode = &cell.Code
+			locationType = stringPtr("storage_cell")
 		}
 	}
 
@@ -229,10 +293,12 @@ func (s *ObjectService) buildBatchCard(ctx context.Context, marker models.Marker
 		box, err := s.boxRepo.GetByID(ctx, *batch.BoxID)
 		if err == nil {
 			parentCode = &box.Code
+			parentType = stringPtr("box")
 			if locationCode == nil && box.StorageCellID != nil {
 				cell, err := s.storageCellRepo.GetByID(ctx, *box.StorageCellID)
 				if err == nil {
 					locationCode = &cell.Code
+					locationType = stringPtr("storage_cell")
 				}
 			}
 		}
@@ -242,26 +308,88 @@ func (s *ObjectService) buildBatchCard(ctx context.Context, marker models.Marker
 		pallet, err := s.palletRepo.GetByID(ctx, *batch.PalletID)
 		if err == nil {
 			parentCode = &pallet.Code
+			parentType = stringPtr("pallet")
 			if locationCode == nil && pallet.StorageCellID != nil {
 				cell, err := s.storageCellRepo.GetByID(ctx, *pallet.StorageCellID)
 				if err == nil {
 					locationCode = &cell.Code
+					locationType = stringPtr("storage_cell")
 				}
 			}
 		}
 	}
 
 	quantity := batch.Quantity
+	product, err := s.productRepo.GetByID(ctx, batch.ProductID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.ObjectCard{}, ErrObjectNotFound
+		}
+		return models.ObjectCard{}, err
+	}
+	contentSummary := fmt.Sprintf("%s, %d %s", product.Name, quantity, product.Unit)
 
 	return models.ObjectCard{
-		MarkerCode:   marker.MarkerCode,
-		ObjectType:   marker.ObjectType,
-		ObjectID:     batch.ID,
-		Code:         batch.Code,
-		Name:         batch.Code,
-		Status:       batch.Status,
-		LocationCode: locationCode,
-		ParentCode:   parentCode,
-		Quantity:     &quantity,
+		MarkerCode:     marker.MarkerCode,
+		ObjectType:     marker.ObjectType,
+		ObjectID:       batch.ID,
+		Code:           batch.Code,
+		Name:           product.Name,
+		Status:         batch.Status,
+		LocationCode:   locationCode,
+		LocationType:   locationType,
+		ParentCode:     parentCode,
+		ParentType:     parentType,
+		Quantity:       &quantity,
+		Unit:           &product.Unit,
+		ProductSKU:     &product.SKU,
+		ProductName:    &product.Name,
+		ContentSummary: &contentSummary,
+		ProductsCount:  int32Ptr(1),
+		TotalQuantity:  &quantity,
 	}, nil
+}
+
+func buildContentSummary(stats models.ObjectContentStats) string {
+	if stats.PalletsCount == 0 &&
+		stats.BoxesCount == 0 &&
+		stats.BatchesCount == 0 &&
+		stats.ProductsCount == 0 &&
+		stats.TotalQuantity == 0 {
+		return "пусто"
+	}
+
+	parts := make([]string, 0, 5)
+	if stats.PalletsCount > 0 {
+		parts = append(parts, fmt.Sprintf("паллет: %d", stats.PalletsCount))
+	}
+	if stats.BoxesCount > 0 {
+		parts = append(parts, fmt.Sprintf("коробов: %d", stats.BoxesCount))
+	}
+	if stats.BatchesCount > 0 {
+		parts = append(parts, fmt.Sprintf("партий: %d", stats.BatchesCount))
+	}
+	if stats.ProductsCount > 0 {
+		parts = append(parts, fmt.Sprintf("товаров: %d", stats.ProductsCount))
+	}
+	if stats.TotalQuantity > 0 {
+		parts = append(parts, fmt.Sprintf("единиц: %d", stats.TotalQuantity))
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+func int32Ptr(value int32) *int32 {
+	return &value
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
+func firstNonEmptyString(value *string, fallback string) string {
+	if value != nil && strings.TrimSpace(*value) != "" {
+		return *value
+	}
+	return fallback
 }

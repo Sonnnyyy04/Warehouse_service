@@ -252,6 +252,51 @@ SELECT EXISTS (
 	return exists, nil
 }
 
+func (r *BoxRepository) GetContentStats(ctx context.Context, boxID int64) (models.ObjectContentStats, error) {
+	const query = `
+WITH box_batches AS (
+    SELECT b.product_id, b.quantity
+    FROM batches b
+    WHERE b.box_id = $1
+),
+product_counts AS (
+    SELECT COUNT(DISTINCT product_id)::INT AS products_count
+    FROM box_batches
+),
+single_product AS (
+    SELECT p.sku, p.name, p.unit
+    FROM box_batches bb
+    JOIN products p ON p.id = bb.product_id
+    GROUP BY p.id, p.sku, p.name, p.unit
+    HAVING (SELECT products_count FROM product_counts) = 1
+    LIMIT 1
+)
+SELECT
+    (SELECT COUNT(*)::INT FROM box_batches) AS batches_count,
+    COALESCE((SELECT products_count FROM product_counts), 0) AS products_count,
+    COALESCE((SELECT SUM(quantity)::INT FROM box_batches), 0) AS total_quantity,
+    sp.sku,
+    sp.name,
+    sp.unit
+FROM single_product sp
+RIGHT JOIN (SELECT 1) anchor ON TRUE
+`
+
+	var stats models.ObjectContentStats
+	if err := r.db.QueryRow(ctx, query, boxID).Scan(
+		&stats.BatchesCount,
+		&stats.ProductsCount,
+		&stats.TotalQuantity,
+		&stats.ProductSKU,
+		&stats.ProductName,
+		&stats.ProductUnit,
+	); err != nil {
+		return models.ObjectContentStats{}, fmt.Errorf("get box content stats: %w", err)
+	}
+
+	return stats, nil
+}
+
 func (r *BoxRepository) DeleteByID(ctx context.Context, id int64) error {
 	const query = `
 DELETE FROM boxes

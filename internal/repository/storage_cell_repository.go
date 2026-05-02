@@ -158,6 +158,52 @@ WHERE id = ANY($1)
 	return cells, nil
 }
 
+func (r *StorageCellRepository) GetContentStats(ctx context.Context, storageCellID int64) (models.ObjectContentStats, error) {
+	const query = `
+WITH cell_pallets AS (
+    SELECT id
+    FROM pallets
+    WHERE storage_cell_id = $1
+),
+cell_boxes AS (
+    SELECT id
+    FROM boxes
+    WHERE storage_cell_id = $1
+       OR pallet_id IN (SELECT id FROM cell_pallets)
+),
+cell_batches AS (
+    SELECT b.product_id, b.quantity
+    FROM batches b
+    WHERE b.storage_cell_id = $1
+       OR b.pallet_id IN (SELECT id FROM cell_pallets)
+       OR b.box_id IN (SELECT id FROM cell_boxes)
+),
+product_counts AS (
+    SELECT COUNT(DISTINCT product_id)::INT AS products_count
+    FROM cell_batches
+)
+SELECT
+    (SELECT COUNT(*)::INT FROM cell_pallets) AS pallets_count,
+    (SELECT COUNT(*)::INT FROM cell_boxes) AS boxes_count,
+    (SELECT COUNT(*)::INT FROM cell_batches) AS batches_count,
+    COALESCE((SELECT products_count FROM product_counts), 0) AS products_count,
+    COALESCE((SELECT SUM(quantity)::INT FROM cell_batches), 0) AS total_quantity
+`
+
+	var stats models.ObjectContentStats
+	if err := r.db.QueryRow(ctx, query, storageCellID).Scan(
+		&stats.PalletsCount,
+		&stats.BoxesCount,
+		&stats.BatchesCount,
+		&stats.ProductsCount,
+		&stats.TotalQuantity,
+	); err != nil {
+		return models.ObjectContentStats{}, fmt.Errorf("get storage cell content stats: %w", err)
+	}
+
+	return stats, nil
+}
+
 func (r *StorageCellRepository) Create(ctx context.Context, code, name string, zone *string, status string) (models.StorageCell, error) {
 	const query = `
 INSERT INTO storage_cells (code, name, zone, status)
