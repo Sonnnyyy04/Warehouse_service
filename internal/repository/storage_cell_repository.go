@@ -26,9 +26,10 @@ func NewStorageCellRepositoryWithQuerier(db Querier) *StorageCellRepository {
 
 func (r *StorageCellRepository) GetByID(ctx context.Context, id int64) (models.StorageCell, error) {
 	const query = `
-SELECT id, code, name, zone, status
-FROM storage_cells
-WHERE id = $1
+SELECT c.id, c.code, c.name, c.zone, c.status, c.rack_id, r.code, r.name
+FROM storage_cells c
+LEFT JOIN racks r ON r.id = c.rack_id
+WHERE c.id = $1
 `
 
 	var cell models.StorageCell
@@ -39,6 +40,9 @@ WHERE id = $1
 		&cell.Name,
 		&cell.Zone,
 		&cell.Status,
+		&cell.RackID,
+		&cell.RackCode,
+		&cell.RackName,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -52,9 +56,10 @@ WHERE id = $1
 
 func (r *StorageCellRepository) GetByCode(ctx context.Context, code string) (models.StorageCell, error) {
 	const query = `
-SELECT id, code, name, zone, status
-FROM storage_cells
-WHERE LOWER(code) = LOWER($1)
+SELECT c.id, c.code, c.name, c.zone, c.status, c.rack_id, r.code, r.name
+FROM storage_cells c
+LEFT JOIN racks r ON r.id = c.rack_id
+WHERE LOWER(c.code) = LOWER($1)
 LIMIT 1
 `
 
@@ -66,6 +71,9 @@ LIMIT 1
 		&cell.Name,
 		&cell.Zone,
 		&cell.Status,
+		&cell.RackID,
+		&cell.RackCode,
+		&cell.RackName,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -79,9 +87,10 @@ LIMIT 1
 
 func (r *StorageCellRepository) List(ctx context.Context, limit int32) ([]models.StorageCell, error) {
 	const query = `
-SELECT id, code, name, zone, status
-FROM storage_cells
-ORDER BY id
+SELECT c.id, c.code, c.name, c.zone, c.status, c.rack_id, r.code, r.name
+FROM storage_cells c
+LEFT JOIN racks r ON r.id = c.rack_id
+ORDER BY c.id
 LIMIT $1
 `
 
@@ -102,6 +111,9 @@ LIMIT $1
 			&cell.Name,
 			&cell.Zone,
 			&cell.Status,
+			&cell.RackID,
+			&cell.RackCode,
+			&cell.RackName,
 		); err != nil {
 			return nil, fmt.Errorf("scan storage cell row: %w", err)
 		}
@@ -122,9 +134,10 @@ func (r *StorageCellRepository) ListByIDs(ctx context.Context, ids []int64) ([]m
 	}
 
 	const query = `
-SELECT id, code, name, zone, status
-FROM storage_cells
-WHERE id = ANY($1)
+SELECT c.id, c.code, c.name, c.zone, c.status, c.rack_id, r.code, r.name
+FROM storage_cells c
+LEFT JOIN racks r ON r.id = c.rack_id
+WHERE c.id = ANY($1)
 `
 
 	rows, err := r.db.Query(ctx, query, ids)
@@ -144,6 +157,9 @@ WHERE id = ANY($1)
 			&cell.Name,
 			&cell.Zone,
 			&cell.Status,
+			&cell.RackID,
+			&cell.RackCode,
+			&cell.RackName,
 		); err != nil {
 			return nil, fmt.Errorf("scan storage cell by id row: %w", err)
 		}
@@ -204,21 +220,29 @@ SELECT
 	return stats, nil
 }
 
-func (r *StorageCellRepository) Create(ctx context.Context, code, name string, zone *string, status string) (models.StorageCell, error) {
+func (r *StorageCellRepository) Create(ctx context.Context, code, name string, zone *string, status string, rackID *int64) (models.StorageCell, error) {
 	const query = `
-INSERT INTO storage_cells (code, name, zone, status)
-VALUES ($1, $2, $3, $4)
-RETURNING id, code, name, zone, status
+WITH inserted AS (
+    INSERT INTO storage_cells (code, name, zone, status, rack_id)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id, code, name, zone, status, rack_id
+)
+SELECT i.id, i.code, i.name, i.zone, i.status, i.rack_id, r.code, r.name
+FROM inserted i
+LEFT JOIN racks r ON r.id = i.rack_id
 `
 
 	var cell models.StorageCell
 
-	if err := r.db.QueryRow(ctx, query, code, name, zone, status).Scan(
+	if err := r.db.QueryRow(ctx, query, code, name, zone, status, rackID).Scan(
 		&cell.ID,
 		&cell.Code,
 		&cell.Name,
 		&cell.Zone,
 		&cell.Status,
+		&cell.RackID,
+		&cell.RackCode,
+		&cell.RackName,
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -230,25 +254,34 @@ RETURNING id, code, name, zone, status
 	return cell, nil
 }
 
-func (r *StorageCellRepository) Update(ctx context.Context, id int64, code, name string, zone *string, status string) (models.StorageCell, error) {
+func (r *StorageCellRepository) Update(ctx context.Context, id int64, code, name string, zone *string, status string, rackID *int64) (models.StorageCell, error) {
 	const query = `
-UPDATE storage_cells
-SET code = $2,
-    name = $3,
-    zone = $4,
-    status = $5
-WHERE id = $1
-RETURNING id, code, name, zone, status
+WITH updated AS (
+    UPDATE storage_cells
+    SET code = $2,
+        name = $3,
+        zone = $4,
+        status = $5,
+        rack_id = $6
+    WHERE id = $1
+    RETURNING id, code, name, zone, status, rack_id
+)
+SELECT u.id, u.code, u.name, u.zone, u.status, u.rack_id, r.code, r.name
+FROM updated u
+LEFT JOIN racks r ON r.id = u.rack_id
 `
 
 	var cell models.StorageCell
 
-	if err := r.db.QueryRow(ctx, query, id, code, name, zone, status).Scan(
+	if err := r.db.QueryRow(ctx, query, id, code, name, zone, status, rackID).Scan(
 		&cell.ID,
 		&cell.Code,
 		&cell.Name,
 		&cell.Zone,
 		&cell.Status,
+		&cell.RackID,
+		&cell.RackCode,
+		&cell.RackName,
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {

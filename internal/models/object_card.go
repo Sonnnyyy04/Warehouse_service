@@ -16,6 +16,7 @@ type ObjectCard struct {
 	ProductSKU     *string `json:"product_sku,omitempty"`
 	ProductName    *string `json:"product_name,omitempty"`
 	ContentSummary *string `json:"content_summary,omitempty"`
+	CellsCount     *int32  `json:"cells_count,omitempty"`
 	PalletsCount   *int32  `json:"pallets_count,omitempty"`
 	BoxesCount     *int32  `json:"boxes_count,omitempty"`
 	BatchesCount   *int32  `json:"batches_count,omitempty"`
@@ -24,6 +25,7 @@ type ObjectCard struct {
 }
 
 type ObjectContentStats struct {
+	CellsCount    int32
 	PalletsCount  int32
 	BoxesCount    int32
 	BatchesCount  int32

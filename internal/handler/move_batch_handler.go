@@ -88,6 +88,10 @@ func (h *MoveBatchHandler) Execute(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{
 				"error": "storage cell is occupied",
 			})
+		case errors.Is(err, service.ErrStorageCellProductConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{
+				"error": "storage cell can store only one product",
+			})
 		case errors.Is(err, service.ErrObjectNotFound):
 			writeJSON(w, http.StatusNotFound, map[string]string{
 				"error": "object not found",

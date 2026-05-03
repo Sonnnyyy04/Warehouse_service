@@ -164,6 +164,68 @@ SELECT EXISTS (
 	return exists, nil
 }
 
+func (r *BatchRepository) ListProductIDsInBox(ctx context.Context, boxID int64) ([]int64, error) {
+	const query = `
+SELECT DISTINCT product_id
+FROM batches
+WHERE box_id = $1
+ORDER BY product_id
+`
+
+	rows, err := r.db.Query(ctx, query, boxID)
+	if err != nil {
+		return nil, fmt.Errorf("list box product ids: %w", err)
+	}
+	defer rows.Close()
+
+	productIDs := make([]int64, 0)
+	for rows.Next() {
+		var productID int64
+		if err := rows.Scan(&productID); err != nil {
+			return nil, fmt.Errorf("scan box product id row: %w", err)
+		}
+		productIDs = append(productIDs, productID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate box product id rows: %w", err)
+	}
+
+	return productIDs, nil
+}
+
+func (r *BatchRepository) HasOtherProductInStorageCell(
+	ctx context.Context,
+	storageCellID int64,
+	productID int64,
+	excludeBatchID *int64,
+	excludeBoxID *int64,
+) (bool, error) {
+	const query = `
+SELECT EXISTS (
+    SELECT 1
+    FROM batches b
+    WHERE b.storage_cell_id = $1
+      AND b.product_id <> $2
+      AND ($3::BIGINT IS NULL OR b.id <> $3)
+    UNION ALL
+    SELECT 1
+    FROM batches b
+    JOIN boxes bx ON bx.id = b.box_id
+    WHERE bx.storage_cell_id = $1
+      AND b.product_id <> $2
+      AND ($3::BIGINT IS NULL OR b.id <> $3)
+      AND ($4::BIGINT IS NULL OR bx.id <> $4)
+)
+`
+
+	var exists bool
+	if err := r.db.QueryRow(ctx, query, storageCellID, productID, excludeBatchID, excludeBoxID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check storage cell product compatibility: %w", err)
+	}
+
+	return exists, nil
+}
+
 func (r *BatchRepository) HasAnyInBox(ctx context.Context, boxID int64) (bool, error) {
 	const query = `
 SELECT EXISTS (

@@ -233,6 +233,8 @@ func mapProductImportRowError(err error) string {
 		return "Выбранная ячейка уже занята"
 	case errors.Is(err, ErrMixedBoxProducts):
 		return "Короб для нового товара должен быть пустым"
+	case errors.Is(err, ErrStorageCellProductConflict):
+		return "В выбранной ячейке уже лежит другой товар"
 	case errors.Is(err, ErrAdminProductExists):
 		return "Товар с таким названием уже существует"
 	case errors.Is(err, repository.ErrConflict), errors.Is(err, ErrAdminConflict):

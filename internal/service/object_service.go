@@ -22,6 +22,11 @@ type StorageCellRepository interface {
 	GetContentStats(ctx context.Context, storageCellID int64) (models.ObjectContentStats, error)
 }
 
+type RackRepository interface {
+	GetByID(ctx context.Context, id int64) (models.Rack, error)
+	GetContentStats(ctx context.Context, rackID int64) (models.ObjectContentStats, error)
+}
+
 type PalletRepository interface {
 	GetByID(ctx context.Context, id int64) (models.Pallet, error)
 	GetContentStats(ctx context.Context, palletID int64) (models.ObjectContentStats, error)
@@ -42,6 +47,7 @@ type BatchRepository interface {
 
 type ObjectService struct {
 	markerRepo      MarkerRepository
+	rackRepo        RackRepository
 	storageCellRepo StorageCellRepository
 	palletRepo      PalletRepository
 	boxRepo         BoxRepository
@@ -51,6 +57,7 @@ type ObjectService struct {
 
 func NewObjectService(
 	markerRepo MarkerRepository,
+	rackRepo RackRepository,
 	storageCellRepo StorageCellRepository,
 	palletRepo PalletRepository,
 	boxRepo BoxRepository,
@@ -59,6 +66,7 @@ func NewObjectService(
 ) *ObjectService {
 	return &ObjectService{
 		markerRepo:      markerRepo,
+		rackRepo:        rackRepo,
 		storageCellRepo: storageCellRepo,
 		palletRepo:      palletRepo,
 		boxRepo:         boxRepo,
@@ -82,6 +90,8 @@ func (s *ObjectService) GetByMarkerCode(ctx context.Context, markerCode string) 
 	}
 
 	switch marker.ObjectType {
+	case "rack":
+		return s.buildRackCard(ctx, marker)
 	case "storage_cell":
 		return s.buildStorageCellCard(ctx, marker)
 	case "pallet":
@@ -97,6 +107,39 @@ func (s *ObjectService) GetByMarkerCode(ctx context.Context, markerCode string) 
 	}
 }
 
+func (s *ObjectService) buildRackCard(ctx context.Context, marker models.Marker) (models.ObjectCard, error) {
+	rack, err := s.rackRepo.GetByID(ctx, marker.ObjectID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.ObjectCard{}, ErrObjectNotFound
+		}
+		return models.ObjectCard{}, err
+	}
+
+	stats, err := s.rackRepo.GetContentStats(ctx, rack.ID)
+	if err != nil {
+		return models.ObjectCard{}, err
+	}
+	contentSummary := buildContentSummary(stats)
+
+	return models.ObjectCard{
+		MarkerCode:     marker.MarkerCode,
+		ObjectType:     marker.ObjectType,
+		ObjectID:       rack.ID,
+		Code:           rack.Code,
+		Name:           rack.Name,
+		Status:         rack.Status,
+		LocationCode:   &rack.Code,
+		LocationType:   stringPtr("rack"),
+		ContentSummary: &contentSummary,
+		CellsCount:     int32Ptr(stats.CellsCount),
+		BoxesCount:     int32Ptr(stats.BoxesCount),
+		BatchesCount:   int32Ptr(stats.BatchesCount),
+		ProductsCount:  int32Ptr(stats.ProductsCount),
+		TotalQuantity:  int32Ptr(stats.TotalQuantity),
+	}, nil
+}
+
 func (s *ObjectService) buildStorageCellCard(ctx context.Context, marker models.Marker) (models.ObjectCard, error) {
 	cell, err := s.storageCellRepo.GetByID(ctx, marker.ObjectID)
 	if err != nil {
@@ -108,6 +151,12 @@ func (s *ObjectService) buildStorageCellCard(ctx context.Context, marker models.
 
 	locationCode := cell.Code
 	locationType := "storage_cell"
+	var parentCode *string
+	var parentType *string
+	if cell.RackCode != nil {
+		parentCode = cell.RackCode
+		parentType = stringPtr("rack")
+	}
 	stats, err := s.storageCellRepo.GetContentStats(ctx, cell.ID)
 	if err != nil {
 		return models.ObjectCard{}, err
@@ -123,6 +172,8 @@ func (s *ObjectService) buildStorageCellCard(ctx context.Context, marker models.
 		Status:         cell.Status,
 		LocationCode:   &locationCode,
 		LocationType:   &locationType,
+		ParentCode:     parentCode,
+		ParentType:     parentType,
 		ContentSummary: &contentSummary,
 		PalletsCount:   int32Ptr(stats.PalletsCount),
 		BoxesCount:     int32Ptr(stats.BoxesCount),
@@ -352,6 +403,7 @@ func (s *ObjectService) buildBatchCard(ctx context.Context, marker models.Marker
 
 func buildContentSummary(stats models.ObjectContentStats) string {
 	if stats.PalletsCount == 0 &&
+		stats.CellsCount == 0 &&
 		stats.BoxesCount == 0 &&
 		stats.BatchesCount == 0 &&
 		stats.ProductsCount == 0 &&
@@ -360,6 +412,9 @@ func buildContentSummary(stats models.ObjectContentStats) string {
 	}
 
 	parts := make([]string, 0, 5)
+	if stats.CellsCount > 0 {
+		parts = append(parts, fmt.Sprintf("ячеек: %d", stats.CellsCount))
+	}
 	if stats.PalletsCount > 0 {
 		parts = append(parts, fmt.Sprintf("паллет: %d", stats.PalletsCount))
 	}

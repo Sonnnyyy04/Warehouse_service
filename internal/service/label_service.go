@@ -35,6 +35,11 @@ type LabelStorageCellRepository interface {
 	ListByIDs(ctx context.Context, ids []int64) ([]models.StorageCell, error)
 }
 
+type LabelRackRepository interface {
+	GetByID(ctx context.Context, id int64) (models.Rack, error)
+	ListByIDs(ctx context.Context, ids []int64) ([]models.Rack, error)
+}
+
 type LabelPalletRepository interface {
 	GetByID(ctx context.Context, id int64) (models.Pallet, error)
 	ListByIDs(ctx context.Context, ids []int64) ([]models.Pallet, error)
@@ -57,6 +62,7 @@ type LabelBatchRepository interface {
 
 type LabelService struct {
 	markerRepo      LabelMarkerRepository
+	rackRepo        LabelRackRepository
 	storageCellRepo LabelStorageCellRepository
 	palletRepo      LabelPalletRepository
 	boxRepo         LabelBoxRepository
@@ -66,6 +72,7 @@ type LabelService struct {
 
 func NewLabelService(
 	markerRepo LabelMarkerRepository,
+	rackRepo LabelRackRepository,
 	storageCellRepo LabelStorageCellRepository,
 	palletRepo LabelPalletRepository,
 	boxRepo LabelBoxRepository,
@@ -74,6 +81,7 @@ func NewLabelService(
 ) *LabelService {
 	return &LabelService{
 		markerRepo:      markerRepo,
+		rackRepo:        rackRepo,
 		storageCellRepo: storageCellRepo,
 		palletRepo:      palletRepo,
 		boxRepo:         boxRepo,
@@ -223,6 +231,19 @@ func (s *LabelService) GenerateLabelsPDF(labels []models.Label) ([]byte, error) 
 
 func (s *LabelService) buildLabel(ctx context.Context, marker models.Marker) (models.Label, error) {
 	switch marker.ObjectType {
+	case "rack":
+		rack, err := s.rackRepo.GetByID(ctx, marker.ObjectID)
+		if err != nil {
+			return models.Label{}, err
+		}
+
+		return models.Label{
+			MarkerCode: marker.MarkerCode,
+			ObjectType: marker.ObjectType,
+			ObjectID:   marker.ObjectID,
+			Code:       rack.Code,
+			Name:       rack.Name,
+		}, nil
 	case "storage_cell":
 		cell, err := s.storageCellRepo.GetByID(ctx, marker.ObjectID)
 		if err != nil {
@@ -343,11 +364,22 @@ func (s *LabelService) preloadLabelResolver(ctx context.Context, markers []model
 	}
 
 	resolver := map[string]map[int64]labelObjectData{
+		"rack":         {},
 		"storage_cell": {},
 		"pallet":       {},
 		"box":          {},
 		"product":      {},
 		"batch":        {},
+	}
+
+	if len(idsByType["rack"]) > 0 {
+		racks, err := s.rackRepo.ListByIDs(ctx, idsByType["rack"])
+		if err != nil {
+			return nil, err
+		}
+		for _, rack := range racks {
+			resolver["rack"][rack.ID] = labelObjectData{Code: rack.Code, Name: rack.Name}
+		}
 	}
 
 	if len(idsByType["storage_cell"]) > 0 {
@@ -405,7 +437,7 @@ func (s *LabelService) preloadLabelResolver(ctx context.Context, markers []model
 
 func isSupportedLabelObjectType(value string) bool {
 	switch value {
-	case "storage_cell", "pallet", "box", "product", "batch":
+	case "rack", "storage_cell", "pallet", "box", "product", "batch":
 		return true
 	default:
 		return false

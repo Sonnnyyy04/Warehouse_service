@@ -25,6 +25,8 @@ type MoveBatchMarkerRepository interface {
 type MoveBatchRepository interface {
 	GetByID(ctx context.Context, id int64) (models.Batch, error)
 	HasOtherProductInBox(ctx context.Context, boxID int64, productID int64, excludeBatchID *int64) (bool, error)
+	ListProductIDsInBox(ctx context.Context, boxID int64) ([]int64, error)
+	HasOtherProductInStorageCell(ctx context.Context, storageCellID int64, productID int64, excludeBatchID *int64, excludeBoxID *int64) (bool, error)
 	MoveToBox(ctx context.Context, batchID, boxID int64) error
 	MoveToStorageCell(ctx context.Context, batchID, storageCellID int64) error
 }
@@ -158,6 +160,12 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 			return models.MoveBatchResult{}, ErrMixedBoxProducts
 		}
 
+		if box.StorageCellID != nil {
+			if err := ensureStorageCellCanAcceptProduct(ctx, batchRepo, *box.StorageCellID, batch.ProductID, &batch.ID, &box.ID); err != nil {
+				return models.MoveBatchResult{}, err
+			}
+		}
+
 		if err := batchRepo.MoveToBox(ctx, batch.ID, box.ID); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return models.MoveBatchResult{}, ErrObjectNotFound
@@ -203,7 +211,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 			return models.MoveBatchResult{}, ErrBatchAlreadyInTargetCell
 		}
 
-		if err := ensureStorageCellIsAvailable(ctx, boxRepo, batchRepo, cell.ID); err != nil {
+		if err := ensureStorageCellCanAcceptProduct(ctx, batchRepo, cell.ID, batch.ProductID, &batch.ID, nil); err != nil {
 			return models.MoveBatchResult{}, err
 		}
 

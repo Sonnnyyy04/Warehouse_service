@@ -32,6 +32,7 @@ func main() {
 	markerRepo := repository.NewMarkerRepository(pool)
 	userRepo := repository.NewUserRepository(pool)
 	userSessionRepo := repository.NewUserSessionRepository(pool)
+	rackRepo := repository.NewRackRepository(pool)
 	storageCellRepo := repository.NewStorageCellRepository(pool)
 	palletRepo := repository.NewPalletRepository(pool)
 	boxRepo := repository.NewBoxRepository(pool)
@@ -42,6 +43,7 @@ func main() {
 
 	objectService := service.NewObjectService(
 		markerRepo,
+		rackRepo,
 		storageCellRepo,
 		palletRepo,
 		boxRepo,
@@ -53,6 +55,7 @@ func main() {
 	operationHistoryService := service.NewOperationHistoryService(operationHistoryRepo)
 	labelService := service.NewLabelService(
 		markerRepo,
+		rackRepo,
 		storageCellRepo,
 		palletRepo,
 		boxRepo,
@@ -62,6 +65,7 @@ func main() {
 	authService := service.NewAuthService(userRepo, userSessionRepo)
 	adminService := service.NewAdminService(
 		productRepo,
+		rackRepo,
 		storageCellRepo,
 		boxRepo,
 		batchRepo,
@@ -232,6 +236,21 @@ func main() {
 			adminHandler.UpdateStorageCellAPI(w, r)
 		case http.MethodDelete:
 			adminHandler.DeleteStorageCellAPI(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/admin/racks", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminHandler.ListRacksAPI(w, r)
+		case http.MethodPost:
+			adminHandler.CreateRackAPI(w, r)
+		case http.MethodPut:
+			adminHandler.UpdateRackAPI(w, r)
+		case http.MethodDelete:
+			adminHandler.DeleteRackAPI(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

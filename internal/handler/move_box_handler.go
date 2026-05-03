@@ -24,6 +24,7 @@ func NewMoveBoxHandler(useCase MoveBoxUseCase) *MoveBoxHandler {
 
 type MoveBoxRequest struct {
 	BoxMarkerCode           string `json:"box_marker_code"`
+	TargetMarkerCode        string `json:"target_marker_code"`
 	ToStorageCellMarkerCode string `json:"to_storage_cell_marker_code"`
 	UserID                  *int64 `json:"user_id"`
 }
@@ -67,6 +68,7 @@ func (h *MoveBoxHandler) Execute(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.useCase.Execute(ctx, service.MoveBoxInput{
 		BoxMarkerCode:           req.BoxMarkerCode,
+		TargetMarkerCode:        req.TargetMarkerCode,
 		ToStorageCellMarkerCode: req.ToStorageCellMarkerCode,
 		UserID:                  &authUser.ID,
 		Actor:                   service.UserSummaryFromUser(authUser),
@@ -75,11 +77,15 @@ func (h *MoveBoxHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidMoveBoxPayload):
 			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error": "box_marker_code and to_storage_cell_marker_code are required",
+				"error": "box_marker_code and target_marker_code are required",
 			})
 		case errors.Is(err, service.ErrInvalidBoxMarkerType):
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error": "box_marker_code must point to box",
+			})
+		case errors.Is(err, service.ErrInvalidBoxTargetMarkerType):
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "target_marker_code must point to storage_cell",
 			})
 		case errors.Is(err, service.ErrInvalidStorageCellMarkerType):
 			writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -92,6 +98,10 @@ func (h *MoveBoxHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{
 				"error": "storage cell is occupied",
+			})
+		case errors.Is(err, service.ErrStorageCellProductConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{
+				"error": "storage cell can store only one product",
 			})
 		case errors.Is(err, service.ErrObjectNotFound):
 			writeJSON(w, http.StatusNotFound, map[string]string{

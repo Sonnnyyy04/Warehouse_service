@@ -15,6 +15,7 @@ import (
 
 type AdminUseCase interface {
 	ListProducts(ctx context.Context, limit int32) ([]models.Product, error)
+	ListRacks(ctx context.Context, limit int32) ([]models.Rack, error)
 	ListStorageCells(ctx context.Context, limit int32) ([]models.StorageCell, error)
 	ListBoxes(ctx context.Context, limit int32) ([]models.Box, error)
 	ListBatches(ctx context.Context, limit int32) ([]models.Batch, error)
@@ -23,6 +24,9 @@ type AdminUseCase interface {
 	ImportProducts(ctx context.Context, reader io.Reader) (models.ProductImportResult, error)
 	UpdateProduct(ctx context.Context, input service.UpdateProductInput) (models.Product, error)
 	DeleteProduct(ctx context.Context, id int64) error
+	CreateRack(ctx context.Context, input service.CreateRackInput) (models.Rack, models.Marker, error)
+	UpdateRack(ctx context.Context, input service.UpdateRackInput) (models.Rack, error)
+	DeleteRack(ctx context.Context, id int64) error
 	CreateStorageCell(ctx context.Context, input service.CreateStorageCellInput) (models.StorageCell, models.Marker, error)
 	UpdateStorageCell(ctx context.Context, input service.UpdateStorageCellInput) (models.StorageCell, error)
 	DeleteStorageCell(ctx context.Context, id int64) error
@@ -67,9 +71,21 @@ type createProductResponse struct {
 }
 
 type createStorageCellRequest struct {
+	Code   string `json:"code"`
+	Name   string `json:"name"`
+	Zone   string `json:"zone"`
+	RackID *int64 `json:"rack_id"`
+}
+
+type createRackRequest struct {
 	Code string `json:"code"`
 	Name string `json:"name"`
 	Zone string `json:"zone"`
+}
+
+type createRackResponse struct {
+	Rack       models.Rack `json:"rack"`
+	MarkerCode string      `json:"marker_code"`
 }
 
 type createStorageCellResponse struct {
@@ -85,6 +101,14 @@ type updateProductRequest struct {
 }
 
 type updateStorageCellRequest struct {
+	ID     int64  `json:"id"`
+	Code   string `json:"code"`
+	Name   string `json:"name"`
+	Zone   string `json:"zone"`
+	RackID *int64 `json:"rack_id"`
+}
+
+type updateRackRequest struct {
 	ID   int64  `json:"id"`
 	Code string `json:"code"`
 	Name string `json:"name"`
@@ -193,6 +217,8 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "box or storage cell not found"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty for a new product"})
+		case errors.Is(err, service.ErrStorageCellProductConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell can store only one product"})
 		case errors.Is(err, service.ErrMixedBoxProducts):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target box must be empty for a new product"})
 		case errors.Is(err, service.ErrAdminProductExists):
@@ -305,6 +331,127 @@ func (h *AdminHandler) DeleteProductAPI(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+func (h *AdminHandler) ListRacksAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var limit int32
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+			return
+		}
+		limit = int32(parsedLimit)
+	}
+
+	racks, err := h.adminUseCase.ListRacks(ctx, limit)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidLimit):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, racks)
+}
+
+func (h *AdminHandler) CreateRackAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req createRackRequest
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	rack, marker, err := h.adminUseCase.CreateRack(ctx, service.CreateRackInput{
+		Code: req.Code,
+		Name: req.Name,
+		Zone: req.Zone,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, repository.ErrConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "rack code already exists"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, createRackResponse{
+		Rack:       rack,
+		MarkerCode: marker.MarkerCode,
+	})
+}
+
+func (h *AdminHandler) UpdateRackAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req updateRackRequest
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	rack, err := h.adminUseCase.UpdateRack(ctx, service.UpdateRackInput{
+		ID:   req.ID,
+		Code: req.Code,
+		Name: req.Name,
+		Zone: req.Zone,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "rack not found"})
+		case errors.Is(err, repository.ErrConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "rack code already exists"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, rack)
+}
+
+func (h *AdminHandler) DeleteRackAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req deleteEntityRequest
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if err := h.adminUseCase.DeleteRack(ctx, req.ID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid rack_id"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "rack not found"})
+		case errors.Is(err, service.ErrAdminRackBusy):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "rack cannot be deleted while it contains storage cells"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func (h *AdminHandler) ListStorageCellsAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -344,14 +491,17 @@ func (h *AdminHandler) CreateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 	}
 
 	storageCell, marker, err := h.adminUseCase.CreateStorageCell(ctx, service.CreateStorageCellInput{
-		Code: req.Code,
-		Name: req.Name,
-		Zone: req.Zone,
+		Code:   req.Code,
+		Name:   req.Name,
+		Zone:   req.Zone,
+		RackID: req.RackID,
 	})
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "rack not found"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, repository.ErrConflict):
@@ -379,17 +529,18 @@ func (h *AdminHandler) UpdateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 	}
 
 	storageCell, err := h.adminUseCase.UpdateStorageCell(ctx, service.UpdateStorageCellInput{
-		ID:   req.ID,
-		Code: req.Code,
-		Name: req.Name,
-		Zone: req.Zone,
+		ID:     req.ID,
+		Code:   req.Code,
+		Name:   req.Name,
+		Zone:   req.Zone,
+		RackID: req.RackID,
 	})
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "storage cell not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "storage cell or rack not found"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell code already exists"})
 		default:
@@ -478,6 +629,8 @@ func (h *AdminHandler) CreateBoxAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "storage cell not found"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
+		case errors.Is(err, service.ErrStorageCellProductConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell can store only one product"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "box code already exists"})
 		default:
@@ -515,6 +668,8 @@ func (h *AdminHandler) UpdateBoxAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "box or storage cell not found"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
+		case errors.Is(err, service.ErrStorageCellProductConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell can store only one product"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "box code already exists"})
 		default:
@@ -608,6 +763,8 @@ func (h *AdminHandler) CreateBatchAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, service.ErrMixedBoxProducts):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
+		case errors.Is(err, service.ErrStorageCellProductConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "product, box or storage cell not found"})
 		case errors.Is(err, repository.ErrConflict):
@@ -652,6 +809,8 @@ func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, service.ErrMixedBoxProducts):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "box can store only one product"})
+		case errors.Is(err, service.ErrStorageCellProductConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "product, box or storage cell not found"})
 		case errors.Is(err, repository.ErrConflict):

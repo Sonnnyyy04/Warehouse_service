@@ -87,7 +87,7 @@ func (s *OperationHistoryService) List(ctx context.Context, filter models.Operat
 
 func isValidObjectType(objectType string) bool {
 	switch objectType {
-	case "storage_cell", "pallet", "box", "product", "batch":
+	case "rack", "storage_cell", "pallet", "box", "product", "batch":
 		return true
 	default:
 		return false
