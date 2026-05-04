@@ -19,11 +19,10 @@ VALUES (
        );
 
 -- box in storage cell
-INSERT INTO boxes (code, status, pallet_id, storage_cell_id)
+INSERT INTO boxes (code, status, storage_cell_id)
 VALUES (
            'BOX-001',
            'active',
-           NULL,
            (SELECT id FROM storage_cells WHERE code = 'A-01-01')
        );
 
@@ -36,14 +35,13 @@ VALUES (
        );
 
 -- batch inside box
-INSERT INTO batches (code, product_id, quantity, status, box_id, pallet_id, storage_cell_id)
+INSERT INTO batches (code, product_id, quantity, status, box_id, storage_cell_id)
 VALUES (
            'BATCH-2026-0001',
            (SELECT id FROM products WHERE sku = 'SKU-0001'),
            25,
            'active',
            (SELECT id FROM boxes WHERE code = 'BOX-001'),
-           NULL,
            NULL
        );
 

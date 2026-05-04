@@ -176,22 +176,15 @@ WHERE c.id = ANY($1)
 
 func (r *StorageCellRepository) GetContentStats(ctx context.Context, storageCellID int64) (models.ObjectContentStats, error) {
 	const query = `
-WITH cell_pallets AS (
-    SELECT id
-    FROM pallets
-    WHERE storage_cell_id = $1
-),
-cell_boxes AS (
+WITH cell_boxes AS (
     SELECT id
     FROM boxes
     WHERE storage_cell_id = $1
-       OR pallet_id IN (SELECT id FROM cell_pallets)
 ),
 cell_batches AS (
     SELECT b.product_id, b.quantity
     FROM batches b
     WHERE b.storage_cell_id = $1
-       OR b.pallet_id IN (SELECT id FROM cell_pallets)
        OR b.box_id IN (SELECT id FROM cell_boxes)
 ),
 product_counts AS (
@@ -199,7 +192,6 @@ product_counts AS (
     FROM cell_batches
 )
 SELECT
-    (SELECT COUNT(*)::INT FROM cell_pallets) AS pallets_count,
     (SELECT COUNT(*)::INT FROM cell_boxes) AS boxes_count,
     (SELECT COUNT(*)::INT FROM cell_batches) AS batches_count,
     COALESCE((SELECT products_count FROM product_counts), 0) AS products_count,
@@ -208,7 +200,6 @@ SELECT
 
 	var stats models.ObjectContentStats
 	if err := r.db.QueryRow(ctx, query, storageCellID).Scan(
-		&stats.PalletsCount,
 		&stats.BoxesCount,
 		&stats.BatchesCount,
 		&stats.ProductsCount,

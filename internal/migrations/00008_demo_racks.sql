@@ -12,13 +12,8 @@ WHERE code = 'A-01-01'
   AND rack_id IS NULL;
 
 UPDATE boxes
-SET storage_cell_id = (SELECT id FROM storage_cells WHERE code = 'A-01-01'),
-    pallet_id = NULL
+SET storage_cell_id = (SELECT id FROM storage_cells WHERE code = 'A-01-01')
 WHERE code = 'BOX-001';
-
-UPDATE batches
-SET pallet_id = NULL
-WHERE code = 'BATCH-2026-0001';
 
 DELETE FROM markers
 WHERE marker_code = 'MRK-PALLET-001';

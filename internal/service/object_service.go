@@ -27,11 +27,6 @@ type RackRepository interface {
 	GetContentStats(ctx context.Context, rackID int64) (models.ObjectContentStats, error)
 }
 
-type PalletRepository interface {
-	GetByID(ctx context.Context, id int64) (models.Pallet, error)
-	GetContentStats(ctx context.Context, palletID int64) (models.ObjectContentStats, error)
-}
-
 type BoxRepository interface {
 	GetByID(ctx context.Context, id int64) (models.Box, error)
 	GetContentStats(ctx context.Context, boxID int64) (models.ObjectContentStats, error)
@@ -49,7 +44,6 @@ type ObjectService struct {
 	markerRepo      MarkerRepository
 	rackRepo        RackRepository
 	storageCellRepo StorageCellRepository
-	palletRepo      PalletRepository
 	boxRepo         BoxRepository
 	productRepo     ProductRepository
 	batchRepo       BatchRepository
@@ -59,7 +53,6 @@ func NewObjectService(
 	markerRepo MarkerRepository,
 	rackRepo RackRepository,
 	storageCellRepo StorageCellRepository,
-	palletRepo PalletRepository,
 	boxRepo BoxRepository,
 	productRepo ProductRepository,
 	batchRepo BatchRepository,
@@ -68,7 +61,6 @@ func NewObjectService(
 		markerRepo:      markerRepo,
 		rackRepo:        rackRepo,
 		storageCellRepo: storageCellRepo,
-		palletRepo:      palletRepo,
 		boxRepo:         boxRepo,
 		productRepo:     productRepo,
 		batchRepo:       batchRepo,
@@ -94,8 +86,6 @@ func (s *ObjectService) GetByMarkerCode(ctx context.Context, markerCode string) 
 		return s.buildRackCard(ctx, marker)
 	case "storage_cell":
 		return s.buildStorageCellCard(ctx, marker)
-	case "pallet":
-		return s.buildPalletCard(ctx, marker)
 	case "box":
 		return s.buildBoxCard(ctx, marker)
 	case "product":
@@ -175,57 +165,10 @@ func (s *ObjectService) buildStorageCellCard(ctx context.Context, marker models.
 		ParentCode:     parentCode,
 		ParentType:     parentType,
 		ContentSummary: &contentSummary,
-		PalletsCount:   int32Ptr(stats.PalletsCount),
 		BoxesCount:     int32Ptr(stats.BoxesCount),
 		BatchesCount:   int32Ptr(stats.BatchesCount),
 		ProductsCount:  int32Ptr(stats.ProductsCount),
 		TotalQuantity:  int32Ptr(stats.TotalQuantity),
-	}, nil
-}
-
-func (s *ObjectService) buildPalletCard(ctx context.Context, marker models.Marker) (models.ObjectCard, error) {
-	pallet, err := s.palletRepo.GetByID(ctx, marker.ObjectID)
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return models.ObjectCard{}, ErrObjectNotFound
-		}
-		return models.ObjectCard{}, err
-	}
-
-	var locationCode *string
-	var locationType *string
-	if pallet.StorageCellID != nil {
-		cell, err := s.storageCellRepo.GetByID(ctx, *pallet.StorageCellID)
-		if err == nil {
-			locationCode = &cell.Code
-			locationType = stringPtr("storage_cell")
-		}
-	}
-
-	stats, err := s.palletRepo.GetContentStats(ctx, pallet.ID)
-	if err != nil {
-		return models.ObjectCard{}, err
-	}
-	contentSummary := buildContentSummary(stats)
-
-	return models.ObjectCard{
-		MarkerCode:     marker.MarkerCode,
-		ObjectType:     marker.ObjectType,
-		ObjectID:       pallet.ID,
-		Code:           pallet.Code,
-		Name:           pallet.Code,
-		Status:         pallet.Status,
-		LocationCode:   locationCode,
-		LocationType:   locationType,
-		ProductSKU:     stats.ProductSKU,
-		ProductName:    stats.ProductName,
-		Unit:           stats.ProductUnit,
-		ContentSummary: &contentSummary,
-		BoxesCount:     int32Ptr(stats.BoxesCount),
-		BatchesCount:   int32Ptr(stats.BatchesCount),
-		ProductsCount:  int32Ptr(stats.ProductsCount),
-		TotalQuantity:  int32Ptr(stats.TotalQuantity),
-		Quantity:       int32Ptr(stats.TotalQuantity),
 	}, nil
 }
 
@@ -248,21 +191,6 @@ func (s *ObjectService) buildBoxCard(ctx context.Context, marker models.Marker) 
 		if err == nil {
 			locationCode = &cell.Code
 			locationType = stringPtr("storage_cell")
-		}
-	}
-
-	if box.PalletID != nil {
-		pallet, err := s.palletRepo.GetByID(ctx, *box.PalletID)
-		if err == nil {
-			parentCode = &pallet.Code
-			parentType = stringPtr("pallet")
-			if locationCode == nil && pallet.StorageCellID != nil {
-				cell, err := s.storageCellRepo.GetByID(ctx, *pallet.StorageCellID)
-				if err == nil {
-					locationCode = &cell.Code
-					locationType = stringPtr("storage_cell")
-				}
-			}
 		}
 	}
 
@@ -355,21 +283,6 @@ func (s *ObjectService) buildBatchCard(ctx context.Context, marker models.Marker
 		}
 	}
 
-	if parentCode == nil && batch.PalletID != nil {
-		pallet, err := s.palletRepo.GetByID(ctx, *batch.PalletID)
-		if err == nil {
-			parentCode = &pallet.Code
-			parentType = stringPtr("pallet")
-			if locationCode == nil && pallet.StorageCellID != nil {
-				cell, err := s.storageCellRepo.GetByID(ctx, *pallet.StorageCellID)
-				if err == nil {
-					locationCode = &cell.Code
-					locationType = stringPtr("storage_cell")
-				}
-			}
-		}
-	}
-
 	quantity := batch.Quantity
 	product, err := s.productRepo.GetByID(ctx, batch.ProductID)
 	if err != nil {
@@ -402,8 +315,7 @@ func (s *ObjectService) buildBatchCard(ctx context.Context, marker models.Marker
 }
 
 func buildContentSummary(stats models.ObjectContentStats) string {
-	if stats.PalletsCount == 0 &&
-		stats.CellsCount == 0 &&
+	if stats.CellsCount == 0 &&
 		stats.BoxesCount == 0 &&
 		stats.BatchesCount == 0 &&
 		stats.ProductsCount == 0 &&

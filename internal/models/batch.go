@@ -7,6 +7,5 @@ type Batch struct {
 	Quantity      int32  `json:"quantity"`
 	Status        string `json:"status"`
 	BoxID         *int64 `json:"box_id"`
-	PalletID      *int64 `json:"pallet_id"`
 	StorageCellID *int64 `json:"storage_cell_id"`
 }

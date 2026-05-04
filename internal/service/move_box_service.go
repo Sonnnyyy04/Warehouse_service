@@ -189,7 +189,7 @@ func (s *MoveBoxService) moveBoxToStorageCell(
 		return models.ObjectCard{}, nil, err
 	}
 
-	if box.PalletID == nil && box.StorageCellID != nil && *box.StorageCellID == targetCell.ID {
+	if box.StorageCellID != nil && *box.StorageCellID == targetCell.ID {
 		return models.ObjectCard{}, nil, ErrBoxAlreadyInTargetCell
 	}
 
@@ -238,7 +238,6 @@ func (s *MoveBoxService) moveBoxToStorageCell(
 		"target_marker_code":         targetMarker.MarkerCode,
 		"target_type":                "storage_cell",
 		"target_storage_cell_marker": targetMarker.MarkerCode,
-		"from_pallet_id":             box.PalletID,
 		"from_storage_cell_id":       box.StorageCellID,
 		"to_storage_cell_id":         targetCell.ID,
 		"to_storage_cell_code":       targetCell.Code,

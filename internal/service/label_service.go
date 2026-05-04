@@ -40,11 +40,6 @@ type LabelRackRepository interface {
 	ListByIDs(ctx context.Context, ids []int64) ([]models.Rack, error)
 }
 
-type LabelPalletRepository interface {
-	GetByID(ctx context.Context, id int64) (models.Pallet, error)
-	ListByIDs(ctx context.Context, ids []int64) ([]models.Pallet, error)
-}
-
 type LabelBoxRepository interface {
 	GetByID(ctx context.Context, id int64) (models.Box, error)
 	ListByIDs(ctx context.Context, ids []int64) ([]models.Box, error)
@@ -64,7 +59,6 @@ type LabelService struct {
 	markerRepo      LabelMarkerRepository
 	rackRepo        LabelRackRepository
 	storageCellRepo LabelStorageCellRepository
-	palletRepo      LabelPalletRepository
 	boxRepo         LabelBoxRepository
 	productRepo     LabelProductRepository
 	batchRepo       LabelBatchRepository
@@ -74,7 +68,6 @@ func NewLabelService(
 	markerRepo LabelMarkerRepository,
 	rackRepo LabelRackRepository,
 	storageCellRepo LabelStorageCellRepository,
-	palletRepo LabelPalletRepository,
 	boxRepo LabelBoxRepository,
 	productRepo LabelProductRepository,
 	batchRepo LabelBatchRepository,
@@ -83,7 +76,6 @@ func NewLabelService(
 		markerRepo:      markerRepo,
 		rackRepo:        rackRepo,
 		storageCellRepo: storageCellRepo,
-		palletRepo:      palletRepo,
 		boxRepo:         boxRepo,
 		productRepo:     productRepo,
 		batchRepo:       batchRepo,

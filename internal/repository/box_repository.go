@@ -26,7 +26,7 @@ func NewBoxRepositoryWithQuerier(db Querier) *BoxRepository {
 
 func (r *BoxRepository) GetByID(ctx context.Context, id int64) (models.Box, error) {
 	const query = `
-SELECT id, code, status, pallet_id, storage_cell_id
+SELECT id, code, status, storage_cell_id
 FROM boxes
 WHERE id = $1
 `
@@ -37,7 +37,6 @@ WHERE id = $1
 		&box.ID,
 		&box.Code,
 		&box.Status,
-		&box.PalletID,
 		&box.StorageCellID,
 	)
 	if err != nil {
@@ -52,7 +51,7 @@ WHERE id = $1
 
 func (r *BoxRepository) GetByCode(ctx context.Context, code string) (models.Box, error) {
 	const query = `
-SELECT id, code, status, pallet_id, storage_cell_id
+SELECT id, code, status, storage_cell_id
 FROM boxes
 WHERE LOWER(code) = LOWER($1)
 LIMIT 1
@@ -64,7 +63,6 @@ LIMIT 1
 		&box.ID,
 		&box.Code,
 		&box.Status,
-		&box.PalletID,
 		&box.StorageCellID,
 	)
 	if err != nil {
@@ -79,7 +77,7 @@ LIMIT 1
 
 func (r *BoxRepository) List(ctx context.Context, limit int32) ([]models.Box, error) {
 	const query = `
-SELECT id, code, status, pallet_id, storage_cell_id
+SELECT id, code, status, storage_cell_id
 FROM boxes
 ORDER BY id
 LIMIT $1
@@ -100,7 +98,6 @@ LIMIT $1
 			&box.ID,
 			&box.Code,
 			&box.Status,
-			&box.PalletID,
 			&box.StorageCellID,
 		); err != nil {
 			return nil, fmt.Errorf("scan box row: %w", err)
@@ -122,7 +119,7 @@ func (r *BoxRepository) ListByIDs(ctx context.Context, ids []int64) ([]models.Bo
 	}
 
 	const query = `
-SELECT id, code, status, pallet_id, storage_cell_id
+SELECT id, code, status, storage_cell_id
 FROM boxes
 WHERE id = ANY($1)
 `
@@ -142,7 +139,6 @@ WHERE id = ANY($1)
 			&box.ID,
 			&box.Code,
 			&box.Status,
-			&box.PalletID,
 			&box.StorageCellID,
 		); err != nil {
 			return nil, fmt.Errorf("scan box by id row: %w", err)
@@ -162,7 +158,7 @@ func (r *BoxRepository) Create(ctx context.Context, code, status string, storage
 	const query = `
 INSERT INTO boxes (code, status, storage_cell_id)
 VALUES ($1, $2, $3)
-RETURNING id, code, status, pallet_id, storage_cell_id
+RETURNING id, code, status, storage_cell_id
 `
 
 	var box models.Box
@@ -171,7 +167,6 @@ RETURNING id, code, status, pallet_id, storage_cell_id
 		&box.ID,
 		&box.Code,
 		&box.Status,
-		&box.PalletID,
 		&box.StorageCellID,
 	); err != nil {
 		var pgErr *pgconn.PgError
@@ -189,10 +184,9 @@ func (r *BoxRepository) Update(ctx context.Context, id int64, code, status strin
 UPDATE boxes
 SET code = $2,
     status = $3,
-    pallet_id = NULL,
     storage_cell_id = $4
 WHERE id = $1
-RETURNING id, code, status, pallet_id, storage_cell_id
+RETURNING id, code, status, storage_cell_id
 `
 
 	var box models.Box
@@ -201,7 +195,6 @@ RETURNING id, code, status, pallet_id, storage_cell_id
 		&box.ID,
 		&box.Code,
 		&box.Status,
-		&box.PalletID,
 		&box.StorageCellID,
 	); err != nil {
 		var pgErr *pgconn.PgError
@@ -220,8 +213,7 @@ RETURNING id, code, status, pallet_id, storage_cell_id
 func (r *BoxRepository) MoveToStorageCell(ctx context.Context, boxID, storageCellID int64) error {
 	cmd, err := r.db.Exec(ctx, `
 		UPDATE boxes
-		SET pallet_id = NULL,
-		    storage_cell_id = $2
+		SET storage_cell_id = $2
 		WHERE id = $1
 	`, boxID, storageCellID)
 	if err != nil {

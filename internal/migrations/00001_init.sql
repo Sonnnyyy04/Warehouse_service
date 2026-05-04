@@ -1,7 +1,6 @@
 -- +goose Up
 CREATE TYPE object_type AS ENUM (
 'storage_cell',
-'pallet',
 'box',
 'product',
 'batch'
@@ -25,19 +24,10 @@ status TEXT NOT NULL DEFAULT 'active',
 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE pallets (
-id BIGSERIAL PRIMARY KEY,
-code TEXT NOT NULL UNIQUE,
-status TEXT NOT NULL DEFAULT 'active',
-storage_cell_id BIGINT REFERENCES storage_cells(id) ON DELETE SET NULL,
-created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE boxes (
 id BIGSERIAL PRIMARY KEY,
 code TEXT NOT NULL UNIQUE,
 status TEXT NOT NULL DEFAULT 'active',
-pallet_id BIGINT REFERENCES pallets(id) ON DELETE SET NULL,
 storage_cell_id BIGINT REFERENCES storage_cells(id) ON DELETE SET NULL,
 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -57,7 +47,6 @@ product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
 quantity INTEGER NOT NULL DEFAULT 0,
 status TEXT NOT NULL DEFAULT 'active',
 box_id BIGINT REFERENCES boxes(id) ON DELETE SET NULL,
-pallet_id BIGINT REFERENCES pallets(id) ON DELETE SET NULL,
 storage_cell_id BIGINT REFERENCES storage_cells(id) ON DELETE SET NULL,
 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -99,7 +88,6 @@ DROP TABLE IF EXISTS markers;
 DROP TABLE IF EXISTS batches;
 DROP TABLE IF EXISTS products;
 DROP TABLE IF EXISTS boxes;
-DROP TABLE IF EXISTS pallets;
 DROP TABLE IF EXISTS storage_cells;
 DROP TABLE IF EXISTS users;
 DROP TYPE IF EXISTS object_type;

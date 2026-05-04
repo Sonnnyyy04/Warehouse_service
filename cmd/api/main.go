@@ -34,7 +34,6 @@ func main() {
 	userSessionRepo := repository.NewUserSessionRepository(pool)
 	rackRepo := repository.NewRackRepository(pool)
 	storageCellRepo := repository.NewStorageCellRepository(pool)
-	palletRepo := repository.NewPalletRepository(pool)
 	boxRepo := repository.NewBoxRepository(pool)
 	productRepo := repository.NewProductRepository(pool)
 	batchRepo := repository.NewBatchRepository(pool)
@@ -45,7 +44,6 @@ func main() {
 		markerRepo,
 		rackRepo,
 		storageCellRepo,
-		palletRepo,
 		boxRepo,
 		productRepo,
 		batchRepo,
@@ -57,7 +55,6 @@ func main() {
 		markerRepo,
 		rackRepo,
 		storageCellRepo,
-		palletRepo,
 		boxRepo,
 		productRepo,
 		batchRepo,

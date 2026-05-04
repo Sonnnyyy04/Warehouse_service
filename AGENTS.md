@@ -397,9 +397,9 @@ The client must adapt to this backend, not the other way around, unless the user
 
 ---
 
-## Current unfinished work: racks instead of pallets
+## Current warehouse model: racks instead of pallets
 
-The user decided to move the active warehouse model away from pallets.
+The user decided to remove pallets from the active warehouse model and from the database.
 Target active model:
 
 `rack -> storage_cell -> box -> batch -> product`
@@ -410,7 +410,7 @@ Business rule:
 - a storage cell may contain multiple boxes/batches, but only for one product;
 - boxes are the main physical unit for received goods;
 - batches store the product quantity and must be placed in boxes, not directly in storage cells;
-- pallets are legacy and should not be part of the active mobile flow.
+- pallets must not be exposed by API/client and should be removed from schema with migration `00010_drop_pallets.sql`.
 
 Already started:
 - added backend rack entity/API;
@@ -423,7 +423,6 @@ Already started:
 - label/QR generation supports active object types: rack, storage_cell, box, batch, product.
 
 Still needs to be finished:
-- keep `pallets`/`pallet_id` as legacy hidden fields unless the user explicitly decides to drop them;
 - verify operation details/history wording after deploy so it does not mention pallets in active flows;
 - verify object cards for rack, storage_cell, box, batch, product after the model change;
 - run `go test ./...` before considering backend changes ready.

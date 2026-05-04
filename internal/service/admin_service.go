@@ -84,8 +84,8 @@ type AdminBatchRepository interface {
 	HasAnyInBox(ctx context.Context, boxID int64) (bool, error)
 	HasAnyInStorageCell(ctx context.Context, storageCellID int64) (bool, error)
 	HasAnyForProduct(ctx context.Context, productID int64) (bool, error)
-	Create(ctx context.Context, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
-	Update(ctx context.Context, id int64, code string, productID int64, quantity int32, status string, boxID *int64, palletID *int64, storageCellID *int64) (models.Batch, error)
+	Create(ctx context.Context, code string, productID int64, quantity int32, status string, boxID *int64, storageCellID *int64) (models.Batch, error)
+	Update(ctx context.Context, id int64, code string, productID int64, quantity int32, status string, boxID *int64, storageCellID *int64) (models.Batch, error)
 	DeleteByID(ctx context.Context, id int64) error
 }
 
@@ -368,7 +368,6 @@ func (s *AdminService) CreateProduct(ctx context.Context, input CreateProductInp
 		input.InitialQuantity,
 		"active",
 		boxID,
-		nil,
 		nil,
 	); err != nil {
 		return models.Product{}, models.Marker{}, err
@@ -906,7 +905,6 @@ func (s *AdminService) CreateBatch(ctx context.Context, input CreateBatchInput) 
 		"active",
 		input.BoxID,
 		nil,
-		nil,
 	)
 	if err != nil {
 		return models.Batch{}, models.Marker{}, err
@@ -987,7 +985,6 @@ func (s *AdminService) UpdateBatch(ctx context.Context, input UpdateBatchInput) 
 		input.Quantity,
 		"active",
 		input.BoxID,
-		nil,
 		nil,
 	)
 	if err != nil {
@@ -1117,8 +1114,6 @@ func buildMarkerCode(objectType string, objectID int64) string {
 		return fmt.Sprintf("MRK-RACK-%03d", objectID)
 	case "storage_cell":
 		return fmt.Sprintf("MRK-CELL-%03d", objectID)
-	case "pallet":
-		return fmt.Sprintf("MRK-PALLET-%03d", objectID)
 	case "box":
 		return fmt.Sprintf("MRK-BOX-%03d", objectID)
 	case "product":

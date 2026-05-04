@@ -26,7 +26,7 @@ func NewBatchRepositoryWithQuerier(db Querier) *BatchRepository {
 
 func (r *BatchRepository) GetByID(ctx context.Context, id int64) (models.Batch, error) {
 	const query = `
-SELECT id, code, product_id, quantity, status, box_id, pallet_id, storage_cell_id
+SELECT id, code, product_id, quantity, status, box_id, storage_cell_id
 FROM batches
 WHERE id = $1
 `
@@ -40,7 +40,6 @@ WHERE id = $1
 		&batch.Quantity,
 		&batch.Status,
 		&batch.BoxID,
-		&batch.PalletID,
 		&batch.StorageCellID,
 	)
 	if err != nil {
@@ -55,7 +54,7 @@ WHERE id = $1
 
 func (r *BatchRepository) List(ctx context.Context, limit int32) ([]models.Batch, error) {
 	const query = `
-SELECT id, code, product_id, quantity, status, box_id, pallet_id, storage_cell_id
+SELECT id, code, product_id, quantity, status, box_id, storage_cell_id
 FROM batches
 ORDER BY id
 LIMIT $1
@@ -79,7 +78,6 @@ LIMIT $1
 			&batch.Quantity,
 			&batch.Status,
 			&batch.BoxID,
-			&batch.PalletID,
 			&batch.StorageCellID,
 		); err != nil {
 			return nil, fmt.Errorf("scan batch row: %w", err)
@@ -101,7 +99,7 @@ func (r *BatchRepository) ListByIDs(ctx context.Context, ids []int64) ([]models.
 	}
 
 	const query = `
-SELECT id, code, product_id, quantity, status, box_id, pallet_id, storage_cell_id
+SELECT id, code, product_id, quantity, status, box_id, storage_cell_id
 FROM batches
 WHERE id = ANY($1)
 `
@@ -124,7 +122,6 @@ WHERE id = ANY($1)
 			&batch.Quantity,
 			&batch.Status,
 			&batch.BoxID,
-			&batch.PalletID,
 			&batch.StorageCellID,
 		); err != nil {
 			return nil, fmt.Errorf("scan batch by id row: %w", err)
@@ -281,7 +278,6 @@ func (r *BatchRepository) MoveToBox(ctx context.Context, batchID, boxID int64) e
 	cmd, err := r.db.Exec(ctx, `
 		UPDATE batches
 		SET box_id = $2,
-		    pallet_id = NULL,
 		    storage_cell_id = NULL
 		WHERE id = $1
 	`, batchID, boxID)
@@ -300,7 +296,6 @@ func (r *BatchRepository) MoveToStorageCell(ctx context.Context, batchID, storag
 	cmd, err := r.db.Exec(ctx, `
 		UPDATE batches
 		SET box_id = NULL,
-		    pallet_id = NULL,
 		    storage_cell_id = $2
 		WHERE id = $1
 	`, batchID, storageCellID)
@@ -322,13 +317,12 @@ func (r *BatchRepository) Create(
 	quantity int32,
 	status string,
 	boxID *int64,
-	palletID *int64,
 	storageCellID *int64,
 ) (models.Batch, error) {
 	const query = `
-INSERT INTO batches (code, product_id, quantity, status, box_id, pallet_id, storage_cell_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cell_id
+INSERT INTO batches (code, product_id, quantity, status, box_id, storage_cell_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, code, product_id, quantity, status, box_id, storage_cell_id
 `
 
 	var batch models.Batch
@@ -341,7 +335,6 @@ RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cel
 		quantity,
 		status,
 		boxID,
-		palletID,
 		storageCellID,
 	).Scan(
 		&batch.ID,
@@ -350,7 +343,6 @@ RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cel
 		&batch.Quantity,
 		&batch.Status,
 		&batch.BoxID,
-		&batch.PalletID,
 		&batch.StorageCellID,
 	); err != nil {
 		var pgErr *pgconn.PgError
@@ -371,7 +363,6 @@ func (r *BatchRepository) Update(
 	quantity int32,
 	status string,
 	boxID *int64,
-	palletID *int64,
 	storageCellID *int64,
 ) (models.Batch, error) {
 	const query = `
@@ -381,10 +372,9 @@ SET code = $2,
     quantity = $4,
     status = $5,
     box_id = $6,
-    pallet_id = $7,
-    storage_cell_id = $8
+    storage_cell_id = $7
 WHERE id = $1
-RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cell_id
+RETURNING id, code, product_id, quantity, status, box_id, storage_cell_id
 `
 
 	var batch models.Batch
@@ -398,7 +388,6 @@ RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cel
 		quantity,
 		status,
 		boxID,
-		palletID,
 		storageCellID,
 	).Scan(
 		&batch.ID,
@@ -407,7 +396,6 @@ RETURNING id, code, product_id, quantity, status, box_id, pallet_id, storage_cel
 		&batch.Quantity,
 		&batch.Status,
 		&batch.BoxID,
-		&batch.PalletID,
 		&batch.StorageCellID,
 	); err != nil {
 		var pgErr *pgconn.PgError
