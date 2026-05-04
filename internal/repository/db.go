@@ -35,13 +35,23 @@ func NewPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("create pg pool: %w", err)
 	}
 
-	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
+	var pingErr error
+	for attempt := 1; attempt <= 10; attempt++ {
+		pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		pingErr = pool.Ping(pingCtx)
+		cancel()
+		if pingErr == nil {
+			return pool, nil
+		}
 
-	if err := pool.Ping(pingCtx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("ping pg: %w", err)
+		select {
+		case <-ctx.Done():
+			pool.Close()
+			return nil, fmt.Errorf("ping pg: %w", ctx.Err())
+		case <-time.After(3 * time.Second):
+		}
 	}
 
-	return pool, nil
+	pool.Close()
+	return nil, fmt.Errorf("ping pg after retries: %w", pingErr)
 }

@@ -175,6 +175,12 @@ jobs:
           retry_count=0
           until ${COMPOSE_CMD} up -d --build --remove-orphans; do
             retry_count=$((retry_count + 1))
+            echo "docker compose up failed on attempt ${retry_count}. Current containers:"
+            ${COMPOSE_CMD} ps -a || true
+            echo "migrate logs:"
+            ${COMPOSE_CMD} logs --no-color migrate || true
+            echo "api logs:"
+            ${COMPOSE_CMD} logs --no-color api || true
             if [ "${retry_count}" -ge 3 ]; then
               echo "docker compose up failed after ${retry_count} attempts"
               exit 1
