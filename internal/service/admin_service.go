@@ -740,6 +740,7 @@ func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (mod
 
 	storageCellRepo := repository.NewStorageCellRepositoryWithQuerier(tx)
 	boxRepo := repository.NewBoxRepositoryWithQuerier(tx)
+	batchRepo := repository.NewBatchRepositoryWithQuerier(tx)
 	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
 
 	if input.StorageCellID != nil {
@@ -750,6 +751,9 @@ func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (mod
 			return models.Box{}, models.Marker{}, err
 		}
 
+		if err := ensureStorageCellIsAvailable(ctx, boxRepo, batchRepo, *input.StorageCellID); err != nil {
+			return models.Box{}, models.Marker{}, err
+		}
 	}
 
 	box, err := boxRepo.Create(ctx, code, "active", input.StorageCellID)
@@ -791,7 +795,7 @@ func (s *AdminService) UpdateBox(ctx context.Context, input UpdateBoxInput) (mod
 			return models.Box{}, err
 		}
 
-		if err := ensureStorageCellCanAcceptBox(ctx, s.batchRepo, *input.StorageCellID, currentBox.ID); err != nil {
+		if err := ensureStorageCellCanAcceptBox(ctx, s.boxRepo, s.batchRepo, *input.StorageCellID, currentBox.ID); err != nil {
 			return models.Box{}, err
 		}
 	}
@@ -1185,10 +1189,14 @@ func buildInitialBatchCode(productID int64) string {
 	return fmt.Sprintf("BAT-INIT-%06d", productID)
 }
 
+type storageCellOccupancyChecker interface {
+	HasAnyInStorageCell(ctx context.Context, storageCellID int64) (bool, error)
+}
+
 func ensureStorageCellIsAvailable(
 	ctx context.Context,
-	boxRepo AdminBoxRepository,
-	batchRepo AdminBatchRepository,
+	boxRepo storageCellOccupancyChecker,
+	batchRepo storageCellOccupancyChecker,
 	storageCellID int64,
 ) error {
 	hasBoxes, err := boxRepo.HasAnyInStorageCell(ctx, storageCellID)
@@ -1212,11 +1220,13 @@ func ensureStorageCellIsAvailable(
 
 type storageCellProductChecker interface {
 	ListProductIDsInBox(ctx context.Context, boxID int64) ([]int64, error)
+	HasAnyInStorageCell(ctx context.Context, storageCellID int64) (bool, error)
 	HasOtherProductInStorageCell(ctx context.Context, storageCellID int64, productID int64, excludeBatchID *int64, excludeBoxID *int64) (bool, error)
 }
 
 func ensureStorageCellCanAcceptBox(
 	ctx context.Context,
+	boxRepo AdminBoxRepository,
 	batchRepo storageCellProductChecker,
 	storageCellID int64,
 	boxID int64,
@@ -1226,7 +1236,7 @@ func ensureStorageCellCanAcceptBox(
 		return err
 	}
 	if len(productIDs) == 0 {
-		return nil
+		return ensureStorageCellIsAvailable(ctx, boxRepo, batchRepo, storageCellID)
 	}
 	if len(productIDs) > 1 {
 		return ErrMixedBoxProducts

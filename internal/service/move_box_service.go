@@ -193,7 +193,7 @@ func (s *MoveBoxService) moveBoxToStorageCell(
 		return models.ObjectCard{}, nil, ErrBoxAlreadyInTargetCell
 	}
 
-	if err := ensureStorageCellCanAcceptBox(ctx, batchRepo, targetCell.ID, box.ID); err != nil {
+	if err := ensureStorageCellCanAcceptBox(ctx, boxRepo, batchRepo, targetCell.ID, box.ID); err != nil {
 		return models.ObjectCard{}, nil, err
 	}
 
