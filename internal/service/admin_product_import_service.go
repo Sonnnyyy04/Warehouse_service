@@ -188,7 +188,7 @@ func resolveProductImportHeaderIndexes(header []string) (productImportHeaderInde
 	if indexes.sku < 0 || indexes.name < 0 || indexes.quantity < 0 {
 		return productImportHeaderIndexes{}, ErrInvalidAdminImport
 	}
-	if indexes.boxCode < 0 && indexes.storageCellCode < 0 {
+	if indexes.boxCode < 0 {
 		return productImportHeaderIndexes{}, ErrInvalidAdminImport
 	}
 
@@ -225,8 +225,8 @@ func mapProductImportRowError(err error) string {
 	switch {
 	case errors.Is(err, ErrInvalidAdminInput):
 		return "Проверьте SKU, название и начальное количество"
-	case errors.Is(err, ErrConflictingBatchTarget):
-		return "Для количества укажите либо короб, либо ячейку"
+	case errors.Is(err, ErrAdminBoxRequired), errors.Is(err, ErrConflictingBatchTarget):
+		return "Для товара укажите короб. Размещение напрямую в ячейку запрещено"
 	case errors.Is(err, ErrInvalidAdminReference):
 		return "Указанный короб или ячейка не найдены"
 	case errors.Is(err, ErrAdminTargetOccupied):

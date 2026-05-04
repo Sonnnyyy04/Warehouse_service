@@ -211,6 +211,8 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sku, name and initial quantity must be valid"})
+		case errors.Is(err, service.ErrAdminBoxRequired):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "product must be placed in box"})
 		case errors.Is(err, service.ErrConflictingBatchTarget):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "initial quantity requires exactly one target: box_code or storage_cell_code"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
@@ -412,6 +414,8 @@ func (h *AdminHandler) UpdateRackAPI(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrAdminRackRequired):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rack_id is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "rack not found"})
 		case errors.Is(err, repository.ErrConflict):
@@ -500,6 +504,8 @@ func (h *AdminHandler) CreateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrAdminRackRequired):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rack_id is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "rack not found"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
@@ -539,6 +545,8 @@ func (h *AdminHandler) UpdateStorageCellAPI(w http.ResponseWriter, r *http.Reque
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrAdminRackRequired):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rack_id is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "storage cell or rack not found"})
 		case errors.Is(err, repository.ErrConflict):
@@ -757,6 +765,8 @@ func (h *AdminHandler) CreateBatchAPI(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code, product_id and quantity are required"})
+		case errors.Is(err, service.ErrAdminBoxRequired):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "batch must be placed in box"})
 		case errors.Is(err, service.ErrConflictingBatchTarget):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "choose either box or storage cell"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
@@ -803,6 +813,8 @@ func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code, product_id and quantity are required"})
+		case errors.Is(err, service.ErrAdminBoxRequired):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "batch must be placed in box"})
 		case errors.Is(err, service.ErrConflictingBatchTarget):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "choose either box or storage cell"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):

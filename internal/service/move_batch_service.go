@@ -120,7 +120,7 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 		return models.MoveBatchResult{}, err
 	}
 
-	if targetMarker.ObjectType != "box" && targetMarker.ObjectType != "storage_cell" {
+	if targetMarker.ObjectType != "box" {
 		return models.MoveBatchResult{}, ErrInvalidBatchTargetMarkerType
 	}
 

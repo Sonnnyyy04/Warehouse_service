@@ -70,7 +70,7 @@ func (h *MoveBatchHandler) Execute(w http.ResponseWriter, r *http.Request) {
 			})
 		case errors.Is(err, service.ErrInvalidBatchTargetMarkerType):
 			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error": "target_marker_code must point to box or storage_cell",
+				"error": "target_marker_code must point to box",
 			})
 		case errors.Is(err, service.ErrBatchAlreadyInTargetBox):
 			writeJSON(w, http.StatusConflict, map[string]string{

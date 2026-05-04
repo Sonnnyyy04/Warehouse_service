@@ -406,9 +406,10 @@ Target active model:
 
 Business rule:
 - a rack groups storage cells and helps find the warehouse sector;
+- every storage cell must belong to a rack;
 - a storage cell may contain multiple boxes/batches, but only for one product;
 - boxes are the main physical unit for received goods;
-- batches store the product quantity;
+- batches store the product quantity and must be placed in boxes, not directly in storage cells;
 - pallets are legacy and should not be part of the active mobile flow.
 
 Already started:
