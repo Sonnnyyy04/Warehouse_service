@@ -18,21 +18,13 @@ VALUES (
            'active'
        );
 
--- pallet in storage cell
-INSERT INTO pallets (code, status, storage_cell_id)
-VALUES (
-           'PALLET-001',
-           'active',
-           (SELECT id FROM storage_cells WHERE code = 'A-01-01')
-       );
-
--- box on pallet
+-- box in storage cell
 INSERT INTO boxes (code, status, pallet_id, storage_cell_id)
 VALUES (
            'BOX-001',
            'active',
-           (SELECT id FROM pallets WHERE code = 'PALLET-001'),
-           NULL
+           NULL,
+           (SELECT id FROM storage_cells WHERE code = 'A-01-01')
        );
 
 -- product
@@ -62,11 +54,6 @@ VALUES
         'MRK-CELL-001',
         'storage_cell',
         (SELECT id FROM storage_cells WHERE code = 'A-01-01')
-    ),
-    (
-        'MRK-PALLET-001',
-        'pallet',
-        (SELECT id FROM pallets WHERE code = 'PALLET-001')
     ),
     (
         'MRK-BOX-001',
@@ -102,7 +89,6 @@ WHERE operation_type = 'seed_created';
 DELETE FROM markers
 WHERE marker_code IN (
                       'MRK-CELL-001',
-                      'MRK-PALLET-001',
                       'MRK-BOX-001',
                       'MRK-PRODUCT-001',
                       'MRK-BATCH-001'
@@ -116,9 +102,6 @@ WHERE sku = 'SKU-0001';
 
 DELETE FROM boxes
 WHERE code = 'BOX-001';
-
-DELETE FROM pallets
-WHERE code = 'PALLET-001';
 
 DELETE FROM storage_cells
 WHERE code = 'A-01-01';

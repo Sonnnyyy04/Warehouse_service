@@ -31,7 +31,7 @@ func NewLabelHandler(useCase LabelUseCase) *LabelHandler {
 // @Description Ð â€™Ð Ñ•Ð Â·Ð Ð†Ð¡Ð‚Ð Â°Ð¡â€°Ð Â°Ð ÂµÐ¡â€š Ð¡ÐƒÐ Ñ—Ð Ñ‘Ð¡ÐƒÐ Ñ•Ð Ñ” warehouse-Ð Ñ•Ð Â±Ð¡Ð‰Ð ÂµÐ Ñ”Ð¡â€šÐ Ñ•Ð Ð† Ð¡Ðƒ marker_code Ð Ò‘Ð Â»Ð¡Ð Ð Ñ–Ð ÂµÐ Ð…Ð ÂµÐ¡Ð‚Ð Â°Ð¡â€ Ð Ñ‘Ð Ñ‘ Ð Ñ‘ Ð Ñ—Ð ÂµÐ¡â€¡Ð Â°Ð¡â€šÐ Ñ‘ QR Ð Ð…Ð Â°Ð Ñ”Ð Â»Ð ÂµÐ ÂµÐ Ñ”.
 // @Tags Ð ÑœÐ Â°Ð Ñ”Ð Â»Ð ÂµÐ â„–Ð Ñ”Ð Ñ‘
 // @Produce json
-// @Param object_type query string false "Ð ÑžÐ Ñ‘Ð Ñ— Ð Ñ•Ð Â±Ð¡Ð‰Ð ÂµÐ Ñ”Ð¡â€šÐ Â°: storage_cell, pallet, box, product, batch"
+// @Param object_type query string false "Object type: rack, storage_cell, box, product, batch"
 // @Param limit query int false "Ð ÑšÐ Â°Ð Ñ”Ð¡ÐƒÐ Ñ‘Ð Ñ˜Ð Â°Ð Â»Ð¡ÐŠÐ Ð…Ð Ñ•Ð Âµ Ð¡â€¡Ð Ñ‘Ð¡ÐƒÐ Â»Ð Ñ• Ð Â·Ð Â°Ð Ñ—Ð Ñ‘Ð¡ÐƒÐ ÂµÐ â„–; Ð Ñ—Ð Ñ• Ð¡Ñ“Ð Ñ˜Ð Ñ•Ð Â»Ð¡â€¡Ð Â°Ð Ð…Ð Ñ‘Ð¡Ð‹ 50, Ð Ñ˜Ð Â°Ð Ñ”Ð¡ÐƒÐ Ñ‘Ð Ñ˜Ð¡Ñ“Ð Ñ˜ 200"
 // @Success 200 {array} models.Label "Ð ÐŽÐ Ñ—Ð Ñ‘Ð¡ÐƒÐ Ñ•Ð Ñ” Ð Ð…Ð Â°Ð Ñ”Ð Â»Ð ÂµÐ ÂµÐ Ñ”"
 // @Failure 400 {object} ErrorResponse "Ð ÑœÐ ÂµÐ Ñ”Ð Ñ•Ð¡Ð‚Ð¡Ð‚Ð ÂµÐ Ñ”Ð¡â€šÐ Ð…Ð¡â€¹Ð â„– Ð Â·Ð Â°Ð Ñ—Ð¡Ð‚Ð Ñ•Ð¡Ðƒ"

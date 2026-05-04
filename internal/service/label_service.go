@@ -257,19 +257,6 @@ func (s *LabelService) buildLabel(ctx context.Context, marker models.Marker) (mo
 			Code:       cell.Code,
 			Name:       cell.Name,
 		}, nil
-	case "pallet":
-		pallet, err := s.palletRepo.GetByID(ctx, marker.ObjectID)
-		if err != nil {
-			return models.Label{}, err
-		}
-
-		return models.Label{
-			MarkerCode: marker.MarkerCode,
-			ObjectType: marker.ObjectType,
-			ObjectID:   marker.ObjectID,
-			Code:       pallet.Code,
-			Name:       pallet.Code,
-		}, nil
 	case "box":
 		box, err := s.boxRepo.GetByID(ctx, marker.ObjectID)
 		if err != nil {
@@ -366,7 +353,6 @@ func (s *LabelService) preloadLabelResolver(ctx context.Context, markers []model
 	resolver := map[string]map[int64]labelObjectData{
 		"rack":         {},
 		"storage_cell": {},
-		"pallet":       {},
 		"box":          {},
 		"product":      {},
 		"batch":        {},
@@ -389,16 +375,6 @@ func (s *LabelService) preloadLabelResolver(ctx context.Context, markers []model
 		}
 		for _, cell := range cells {
 			resolver["storage_cell"][cell.ID] = labelObjectData{Code: cell.Code, Name: cell.Name}
-		}
-	}
-
-	if len(idsByType["pallet"]) > 0 {
-		pallets, err := s.palletRepo.ListByIDs(ctx, idsByType["pallet"])
-		if err != nil {
-			return nil, err
-		}
-		for _, pallet := range pallets {
-			resolver["pallet"][pallet.ID] = labelObjectData{Code: pallet.Code, Name: pallet.Code}
 		}
 	}
 
@@ -437,7 +413,7 @@ func (s *LabelService) preloadLabelResolver(ctx context.Context, markers []model
 
 func isSupportedLabelObjectType(value string) bool {
 	switch value {
-	case "rack", "storage_cell", "pallet", "box", "product", "batch":
+	case "rack", "storage_cell", "box", "product", "batch":
 		return true
 	default:
 		return false

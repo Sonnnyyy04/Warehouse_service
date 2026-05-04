@@ -394,3 +394,35 @@ then go to the client repository;
 implement the client against the existing backend rather than inventing a new API.
 
 The client must adapt to this backend, not the other way around, unless the user explicitly requests backend changes.
+
+---
+
+## Current unfinished work: racks instead of pallets
+
+The user decided to move the active warehouse model away from pallets.
+Target active model:
+
+`rack -> storage_cell -> box -> batch -> product`
+
+Business rule:
+- a rack groups storage cells and helps find the warehouse sector;
+- a storage cell may contain multiple boxes/batches, but only for one product;
+- boxes are the main physical unit for received goods;
+- batches store the product quantity;
+- pallets are legacy and should not be part of the active mobile flow.
+
+Already started:
+- added backend rack entity/API;
+- added `rack_id` to storage cells;
+- added rack QR marker support;
+- object cards can resolve rack markers;
+- added backend checks so one storage cell cannot contain different products;
+- demo seed/migration now moves demo storage to rack `RACK-A-001` and marker `MRK-RACK-001`;
+- active content summaries no longer mention pallets;
+- label/QR generation supports active object types: rack, storage_cell, box, batch, product.
+
+Still needs to be finished:
+- keep `pallets`/`pallet_id` as legacy hidden fields unless the user explicitly decides to drop them;
+- verify operation details/history wording after deploy so it does not mention pallets in active flows;
+- verify object cards for rack, storage_cell, box, batch, product after the model change;
+- run `go test ./...` before considering backend changes ready.

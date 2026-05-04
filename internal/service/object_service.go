@@ -415,9 +415,6 @@ func buildContentSummary(stats models.ObjectContentStats) string {
 	if stats.CellsCount > 0 {
 		parts = append(parts, fmt.Sprintf("ячеек: %d", stats.CellsCount))
 	}
-	if stats.PalletsCount > 0 {
-		parts = append(parts, fmt.Sprintf("паллет: %d", stats.PalletsCount))
-	}
 	if stats.BoxesCount > 0 {
 		parts = append(parts, fmt.Sprintf("коробов: %d", stats.BoxesCount))
 	}
