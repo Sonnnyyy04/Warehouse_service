@@ -6,43 +6,6 @@ WHERE object_type::text = 'pallet'
 DELETE FROM operation_history
 WHERE object_type::text = 'pallet';
 
-DO $$
-BEGIN
-    IF to_regclass('public.pallets') IS NOT NULL
-       AND EXISTS (
-           SELECT 1
-           FROM information_schema.columns
-           WHERE table_schema = 'public'
-             AND table_name = 'boxes'
-             AND column_name = 'pallet_id'
-       )
-    THEN
-        UPDATE boxes b
-        SET storage_cell_id = COALESCE(b.storage_cell_id, p.storage_cell_id)
-        FROM pallets p
-        WHERE b.pallet_id = p.id;
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF to_regclass('public.pallets') IS NOT NULL
-       AND EXISTS (
-           SELECT 1
-           FROM information_schema.columns
-           WHERE table_schema = 'public'
-             AND table_name = 'batches'
-             AND column_name = 'pallet_id'
-       )
-    THEN
-        UPDATE batches b
-        SET storage_cell_id = COALESCE(b.storage_cell_id, p.storage_cell_id)
-        FROM pallets p
-        WHERE b.pallet_id = p.id
-          AND b.box_id IS NULL;
-    END IF;
-END $$;
-
 ALTER TABLE boxes
     DROP COLUMN IF EXISTS pallet_id;
 
