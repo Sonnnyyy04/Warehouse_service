@@ -81,6 +81,35 @@ LIMIT 1
 	return product, nil
 }
 
+func (r *ProductRepository) GetBySKU(ctx context.Context, sku string) (models.Product, error) {
+	const query = `
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+FROM products p
+LEFT JOIN batches b ON b.product_id = p.id
+WHERE LOWER(p.sku) = LOWER($1)
+GROUP BY p.id, p.sku, p.name, p.unit
+LIMIT 1
+`
+
+	var product models.Product
+
+	err := r.db.QueryRow(ctx, query, sku).Scan(
+		&product.ID,
+		&product.SKU,
+		&product.Name,
+		&product.Unit,
+		&product.TotalQuantity,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Product{}, ErrNotFound
+		}
+		return models.Product{}, fmt.Errorf("get product by sku: %w", err)
+	}
+
+	return product, nil
+}
+
 func (r *ProductRepository) List(ctx context.Context, limit int32) ([]models.Product, error) {
 	const query = `
 SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity

@@ -80,6 +80,7 @@ func (s *AdminService) ImportInboundShipment(ctx context.Context, reader io.Read
 	}()
 
 	aliasRepo := repository.NewProductAliasRepositoryWithQuerier(tx)
+	productRepo := repository.NewProductRepositoryWithQuerier(tx)
 	shipmentRepo := repository.NewInboundShipmentRepositoryWithQuerier(tx)
 
 	shipment, err := shipmentRepo.Create(ctx, shipmentCode, supplierName)
@@ -100,6 +101,17 @@ func (s *AdminService) ImportInboundShipment(ctx context.Context, reader io.Read
 			status = "matched"
 		} else if !errors.Is(err, repository.ErrNotFound) {
 			return models.InboundShipmentImportResult{}, err
+		} else {
+			product, err := productRepo.GetBySKU(ctx, row.SupplierArticle)
+			if err == nil {
+				productID = &product.ID
+				status = "matched"
+				if _, err := aliasRepo.UpsertSupplierArticle(ctx, product.ID, row.SupplierName, row.SupplierArticle); err != nil {
+					return models.InboundShipmentImportResult{}, err
+				}
+			} else if !errors.Is(err, repository.ErrNotFound) {
+				return models.InboundShipmentImportResult{}, err
+			}
 		}
 
 		item, err := shipmentRepo.CreateItem(ctx, models.InboundShipmentItem{
