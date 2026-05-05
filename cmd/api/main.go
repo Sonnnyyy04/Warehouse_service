@@ -37,6 +37,8 @@ func main() {
 	boxRepo := repository.NewBoxRepository(pool)
 	productRepo := repository.NewProductRepository(pool)
 	batchRepo := repository.NewBatchRepository(pool)
+	productAliasRepo := repository.NewProductAliasRepository(pool)
+	inboundShipmentRepo := repository.NewInboundShipmentRepository(pool)
 	scanEventRepo := repository.NewScanEventRepository(pool)
 	operationHistoryRepo := repository.NewOperationHistoryRepository(pool)
 
@@ -68,6 +70,8 @@ func main() {
 		batchRepo,
 		markerRepo,
 		userRepo,
+		productAliasRepo,
+		inboundShipmentRepo,
 		pool,
 	)
 
@@ -218,6 +222,55 @@ func main() {
 		switch r.Method {
 		case http.MethodPost:
 			adminHandler.ImportProductsAPI(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/admin/shipments", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if r.URL.Query().Get("id") != "" {
+				adminHandler.GetInboundShipmentAPI(w, r)
+				return
+			}
+			adminHandler.ListInboundShipmentsAPI(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/admin/shipments/import", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			adminHandler.ImportInboundShipmentAPI(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/admin/shipments/items/link-product", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			adminHandler.LinkInboundShipmentItemAPI(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/admin/shipments/items/create-product", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			adminHandler.CreateProductForInboundShipmentItemAPI(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/admin/shipments/generate", authMiddleware.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			adminHandler.GenerateInboundShipmentAPI(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

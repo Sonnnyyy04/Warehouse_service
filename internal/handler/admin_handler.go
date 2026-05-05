@@ -38,6 +38,12 @@ type AdminUseCase interface {
 	DeleteBatch(ctx context.Context, id int64) error
 	CreateWorker(ctx context.Context, input service.CreateWorkerInput) (models.User, error)
 	DeleteWorker(ctx context.Context, actor models.User, userID int64) error
+	ListInboundShipments(ctx context.Context, limit int32) ([]models.InboundShipment, error)
+	GetInboundShipment(ctx context.Context, id int64) (models.InboundShipment, []models.InboundShipmentBox, error)
+	ImportInboundShipment(ctx context.Context, reader io.Reader) (models.InboundShipmentImportResult, error)
+	LinkInboundShipmentItem(ctx context.Context, input service.LinkShipmentItemInput) (models.InboundShipmentItem, error)
+	CreateProductForInboundShipmentItem(ctx context.Context, input service.CreateProductForShipmentItemInput) (models.InboundShipmentItem, error)
+	GenerateInboundShipment(ctx context.Context, shipmentID int64) (models.InboundShipmentGenerateResult, error)
 }
 
 type AdminHandler struct {
@@ -159,6 +165,23 @@ type deleteWorkerRequest struct {
 
 type deleteEntityRequest struct {
 	ID int64 `json:"id"`
+}
+
+type inboundShipmentDetailResponse struct {
+	Shipment models.InboundShipment      `json:"shipment"`
+	Boxes    []models.InboundShipmentBox `json:"boxes"`
+}
+
+type linkShipmentItemRequest struct {
+	ItemID    int64 `json:"item_id"`
+	ProductID int64 `json:"product_id"`
+}
+
+type createProductForShipmentItemRequest struct {
+	ItemID int64  `json:"item_id"`
+	SKU    string `json:"sku"`
+	Name   string `json:"name"`
+	Unit   string `json:"unit"`
 }
 
 func (h *AdminHandler) ListProductsAPI(w http.ResponseWriter, r *http.Request) {
@@ -967,4 +990,196 @@ func (h *AdminHandler) DeleteWorkerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *AdminHandler) ListInboundShipmentsAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var limit int32
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+			return
+		}
+		limit = int32(parsedLimit)
+	}
+
+	shipments, err := h.adminUseCase.ListInboundShipments(ctx, limit)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidLimit):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, shipments)
+}
+
+func (h *AdminHandler) GetInboundShipmentAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	shipmentID, err := parseIDQuery(r, "id")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid shipment_id"})
+		return
+	}
+
+	shipment, boxes, err := h.adminUseCase.GetInboundShipment(ctx, shipmentID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid shipment_id"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "shipment not found"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, inboundShipmentDetailResponse{
+		Shipment: shipment,
+		Boxes:    boxes,
+	})
+}
+
+func (h *AdminHandler) ImportInboundShipmentAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid multipart form"})
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file is required"})
+		return
+	}
+	defer file.Close()
+
+	result, err := h.adminUseCase.ImportInboundShipment(ctx, file)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminImport):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid shipment excel file"})
+		case errors.Is(err, service.ErrEmptyAdminImport):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "excel file contains no shipment rows"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (h *AdminHandler) LinkInboundShipmentItemAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req linkShipmentItemRequest
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	item, err := h.adminUseCase.LinkInboundShipmentItem(ctx, service.LinkShipmentItemInput{
+		ItemID:    req.ItemID,
+		ProductID: req.ProductID,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "item_id and product_id are required"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "shipment item or product not found"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *AdminHandler) CreateProductForInboundShipmentItemAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req createProductForShipmentItemRequest
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	item, err := h.adminUseCase.CreateProductForInboundShipmentItem(ctx, service.CreateProductForShipmentItemInput{
+		ItemID: req.ItemID,
+		SKU:    req.SKU,
+		Name:   req.Name,
+		Unit:   req.Unit,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "item_id, sku and name are required"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "shipment item not found"})
+		case errors.Is(err, repository.ErrConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "product sku already exists"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *AdminHandler) GenerateInboundShipmentAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	var req deleteEntityRequest
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	result, err := h.adminUseCase.GenerateInboundShipment(ctx, req.ID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid shipment_id"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "shipment not found"})
+		case errors.Is(err, service.ErrInboundShipmentUnresolved):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "shipment has unresolved items"})
+		case errors.Is(err, service.ErrInboundShipmentGenerated):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "shipment already generated"})
+		case errors.Is(err, repository.ErrConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "shipment boxes already exist"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func parseIDQuery(r *http.Request, name string) (int64, error) {
+	rawValue := r.URL.Query().Get(name)
+	if rawValue == "" {
+		return 0, strconv.ErrSyntax
+	}
+
+	return strconv.ParseInt(rawValue, 10, 64)
 }

@@ -34,6 +34,8 @@ var (
 	ErrAdminBoxNotEmpty           = errors.New("admin box not empty")
 	ErrAdminStorageCellBusy       = errors.New("admin storage cell busy")
 	ErrAdminRackBusy              = errors.New("admin rack busy")
+	ErrInboundShipmentUnresolved  = errors.New("inbound shipment has unresolved items")
+	ErrInboundShipmentGenerated   = errors.New("inbound shipment already generated")
 )
 
 var latinLoginPattern = regexp.MustCompile(`^[a-z]+$`)
@@ -100,6 +102,25 @@ type AdminUserRepository interface {
 	GetByID(ctx context.Context, id int64) (models.User, error)
 	Create(ctx context.Context, login, email, fullName, role, passwordHash string) (models.User, error)
 	DeleteByID(ctx context.Context, id int64) error
+}
+
+type AdminProductAliasRepository interface {
+	GetBySupplierArticle(ctx context.Context, supplierName, article string) (models.ProductAlias, error)
+	UpsertSupplierArticle(ctx context.Context, productID int64, supplierName, article string) (models.ProductAlias, error)
+}
+
+type AdminInboundShipmentRepository interface {
+	Create(ctx context.Context, code, supplierName string) (models.InboundShipment, error)
+	List(ctx context.Context, limit int32) ([]models.InboundShipment, error)
+	GetByID(ctx context.Context, id int64) (models.InboundShipment, error)
+	CreateItem(ctx context.Context, item models.InboundShipmentItem) (models.InboundShipmentItem, error)
+	ListItems(ctx context.Context, shipmentID int64) ([]models.InboundShipmentItem, error)
+	GetItemByID(ctx context.Context, id int64) (models.InboundShipmentItem, error)
+	UpdateItemProduct(ctx context.Context, itemID int64, productID int64) (models.InboundShipmentItem, error)
+	CreatePlannedBox(ctx context.Context, itemID int64, plannedQuantity int32) (models.InboundShipmentBox, error)
+	ListBoxes(ctx context.Context, shipmentID int64) ([]models.InboundShipmentBox, error)
+	AssignBoxBatch(ctx context.Context, shipmentBoxID int64, boxID int64, batchID int64) error
+	UpdateStatus(ctx context.Context, shipmentID int64, status string) error
 }
 
 type CreateProductInput struct {
@@ -183,15 +204,29 @@ type CreateWorkerInput struct {
 	Role     string
 }
 
+type LinkShipmentItemInput struct {
+	ItemID    int64
+	ProductID int64
+}
+
+type CreateProductForShipmentItemInput struct {
+	ItemID int64
+	SKU    string
+	Name   string
+	Unit   string
+}
+
 type AdminService struct {
-	productRepo     AdminProductRepository
-	rackRepo        AdminRackRepository
-	storageCellRepo AdminStorageCellRepository
-	boxRepo         AdminBoxRepository
-	batchRepo       AdminBatchRepository
-	markerRepo      AdminMarkerRepository
-	userRepo        AdminUserRepository
-	txPool          repository.TxBeginner
+	productRepo      AdminProductRepository
+	rackRepo         AdminRackRepository
+	storageCellRepo  AdminStorageCellRepository
+	boxRepo          AdminBoxRepository
+	batchRepo        AdminBatchRepository
+	markerRepo       AdminMarkerRepository
+	userRepo         AdminUserRepository
+	productAliasRepo AdminProductAliasRepository
+	shipmentRepo     AdminInboundShipmentRepository
+	txPool           repository.TxBeginner
 }
 
 func NewAdminService(
@@ -202,17 +237,21 @@ func NewAdminService(
 	batchRepo AdminBatchRepository,
 	markerRepo AdminMarkerRepository,
 	userRepo AdminUserRepository,
+	productAliasRepo AdminProductAliasRepository,
+	shipmentRepo AdminInboundShipmentRepository,
 	txPool repository.TxBeginner,
 ) *AdminService {
 	return &AdminService{
-		productRepo:     productRepo,
-		rackRepo:        rackRepo,
-		storageCellRepo: storageCellRepo,
-		boxRepo:         boxRepo,
-		batchRepo:       batchRepo,
-		markerRepo:      markerRepo,
-		userRepo:        userRepo,
-		txPool:          txPool,
+		productRepo:      productRepo,
+		rackRepo:         rackRepo,
+		storageCellRepo:  storageCellRepo,
+		boxRepo:          boxRepo,
+		batchRepo:        batchRepo,
+		markerRepo:       markerRepo,
+		userRepo:         userRepo,
+		productAliasRepo: productAliasRepo,
+		shipmentRepo:     shipmentRepo,
+		txPool:           txPool,
 	}
 }
 
