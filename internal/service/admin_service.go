@@ -1223,6 +1223,22 @@ func ensureStorageCellCanAcceptBox(
 	storageCellID int64,
 	boxID int64,
 ) error {
+	hasBoxes, err := boxRepo.HasAnyInStorageCell(ctx, storageCellID)
+	if err != nil {
+		return err
+	}
+	if hasBoxes {
+		return ErrAdminTargetOccupied
+	}
+
+	hasBatches, err := batchRepo.HasAnyInStorageCell(ctx, storageCellID)
+	if err != nil {
+		return err
+	}
+	if hasBatches {
+		return ErrAdminTargetOccupied
+	}
+
 	productIDs, err := batchRepo.ListProductIDsInBox(ctx, boxID)
 	if err != nil {
 		return err
