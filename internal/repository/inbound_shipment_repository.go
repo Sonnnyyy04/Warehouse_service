@@ -56,6 +56,14 @@ SELECT
     COUNT(i.id) FILTER (WHERE i.status = 'matched')::int,
     COUNT(i.id) FILTER (WHERE i.status = 'unresolved')::int,
     COALESCE(SUM(i.boxes_count), 0)::int,
+    (
+        SELECT COUNT(*)::int
+        FROM inbound_shipment_boxes sb
+        JOIN inbound_shipment_items si ON si.id = sb.shipment_item_id
+        JOIN boxes bx ON bx.id = sb.box_id
+        WHERE si.shipment_id = s.id
+          AND bx.storage_cell_id IS NOT NULL
+    ) AS placed_boxes_count,
     COALESCE(SUM(i.total_quantity), 0)::int
 FROM inbound_shipments s
 LEFT JOIN inbound_shipment_items i ON i.shipment_id = s.id
@@ -83,6 +91,7 @@ LIMIT $1
 			&shipment.MatchedItems,
 			&shipment.UnresolvedItems,
 			&shipment.BoxesCount,
+			&shipment.PlacedBoxesCount,
 			&shipment.TotalQuantity,
 		); err != nil {
 			return nil, fmt.Errorf("scan inbound shipment: %w", err)
@@ -109,6 +118,14 @@ SELECT
     COUNT(i.id) FILTER (WHERE i.status = 'matched')::int,
     COUNT(i.id) FILTER (WHERE i.status = 'unresolved')::int,
     COALESCE(SUM(i.boxes_count), 0)::int,
+    (
+        SELECT COUNT(*)::int
+        FROM inbound_shipment_boxes sb
+        JOIN inbound_shipment_items si ON si.id = sb.shipment_item_id
+        JOIN boxes bx ON bx.id = sb.box_id
+        WHERE si.shipment_id = s.id
+          AND bx.storage_cell_id IS NOT NULL
+    ) AS placed_boxes_count,
     COALESCE(SUM(i.total_quantity), 0)::int
 FROM inbound_shipments s
 LEFT JOIN inbound_shipment_items i ON i.shipment_id = s.id
@@ -127,6 +144,7 @@ GROUP BY s.id, s.code, s.supplier_name, s.status, s.created_at
 		&shipment.MatchedItems,
 		&shipment.UnresolvedItems,
 		&shipment.BoxesCount,
+		&shipment.PlacedBoxesCount,
 		&shipment.TotalQuantity,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

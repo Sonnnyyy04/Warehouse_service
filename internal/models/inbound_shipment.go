@@ -12,17 +12,18 @@ type ProductAlias struct {
 }
 
 type InboundShipment struct {
-	ID              int64                 `json:"id"`
-	Code            string                `json:"code"`
-	SupplierName    string                `json:"supplier_name"`
-	Status          string                `json:"status"`
-	CreatedAt       time.Time             `json:"created_at"`
-	Items           []InboundShipmentItem `json:"items,omitempty"`
-	TotalItems      int32                 `json:"total_items"`
-	MatchedItems    int32                 `json:"matched_items"`
-	UnresolvedItems int32                 `json:"unresolved_items"`
-	BoxesCount      int32                 `json:"boxes_count"`
-	TotalQuantity   int32                 `json:"total_quantity"`
+	ID               int64                 `json:"id"`
+	Code             string                `json:"code"`
+	SupplierName     string                `json:"supplier_name"`
+	Status           string                `json:"status"`
+	CreatedAt        time.Time             `json:"created_at"`
+	Items            []InboundShipmentItem `json:"items,omitempty"`
+	TotalItems       int32                 `json:"total_items"`
+	MatchedItems     int32                 `json:"matched_items"`
+	UnresolvedItems  int32                 `json:"unresolved_items"`
+	BoxesCount       int32                 `json:"boxes_count"`
+	PlacedBoxesCount int32                 `json:"placed_boxes_count"`
+	TotalQuantity    int32                 `json:"total_quantity"`
 }
 
 type InboundShipmentItem struct {
