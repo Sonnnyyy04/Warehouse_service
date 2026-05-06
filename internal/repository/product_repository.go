@@ -151,6 +151,50 @@ LIMIT $1
 	return products, nil
 }
 
+func (r *ProductRepository) Search(ctx context.Context, query string, limit int32) ([]models.Product, error) {
+	const sql = `
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+FROM products p
+LEFT JOIN batches b ON b.product_id = p.id
+WHERE $1 = ''
+   OR LOWER(p.sku) LIKE '%' || LOWER($1) || '%'
+   OR LOWER(p.name) LIKE '%' || LOWER($1) || '%'
+GROUP BY p.id, p.sku, p.name, p.unit
+ORDER BY p.name, p.sku
+LIMIT $2
+`
+
+	rows, err := r.db.Query(ctx, sql, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("search products: %w", err)
+	}
+	defer rows.Close()
+
+	products := make([]models.Product, 0)
+
+	for rows.Next() {
+		var product models.Product
+
+		if err := rows.Scan(
+			&product.ID,
+			&product.SKU,
+			&product.Name,
+			&product.Unit,
+			&product.TotalQuantity,
+		); err != nil {
+			return nil, fmt.Errorf("scan product search row: %w", err)
+		}
+
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate product search rows: %w", err)
+	}
+
+	return products, nil
+}
+
 func (r *ProductRepository) ListByIDs(ctx context.Context, ids []int64) ([]models.Product, error) {
 	if len(ids) == 0 {
 		return []models.Product{}, nil
@@ -193,6 +237,76 @@ GROUP BY p.id, p.sku, p.name, p.unit
 	}
 
 	return products, nil
+}
+
+func (r *ProductRepository) ListLocations(ctx context.Context, productID int64) ([]models.ProductLocation, error) {
+	const query = `
+SELECT
+    bx.id,
+    bx.code,
+    box_marker.marker_code,
+    bx.status,
+    b.id,
+    b.code,
+    batch_marker.marker_code,
+    b.quantity,
+    sc.id,
+    sc.code,
+    sc.name,
+    rck.id,
+    rck.code,
+    rck.name
+FROM batches b
+JOIN boxes bx ON bx.id = b.box_id
+LEFT JOIN storage_cells sc ON sc.id = bx.storage_cell_id
+LEFT JOIN racks rck ON rck.id = sc.rack_id
+LEFT JOIN markers box_marker ON box_marker.object_type::text = 'box' AND box_marker.object_id = bx.id
+LEFT JOIN markers batch_marker ON batch_marker.object_type::text = 'batch' AND batch_marker.object_id = b.id
+WHERE b.product_id = $1
+  AND b.quantity > 0
+  AND b.status = 'active'
+  AND bx.status = 'active'
+ORDER BY rck.code NULLS LAST, sc.code NULLS LAST, bx.code, b.code
+`
+
+	rows, err := r.db.Query(ctx, query, productID)
+	if err != nil {
+		return nil, fmt.Errorf("list product locations: %w", err)
+	}
+	defer rows.Close()
+
+	locations := make([]models.ProductLocation, 0)
+
+	for rows.Next() {
+		var location models.ProductLocation
+
+		if err := rows.Scan(
+			&location.BoxID,
+			&location.BoxCode,
+			&location.BoxMarkerCode,
+			&location.BoxStatus,
+			&location.BatchID,
+			&location.BatchCode,
+			&location.BatchMarkerCode,
+			&location.Quantity,
+			&location.StorageCellID,
+			&location.StorageCellCode,
+			&location.StorageCellName,
+			&location.RackID,
+			&location.RackCode,
+			&location.RackName,
+		); err != nil {
+			return nil, fmt.Errorf("scan product location row: %w", err)
+		}
+
+		locations = append(locations, location)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate product location rows: %w", err)
+	}
+
+	return locations, nil
 }
 
 func (r *ProductRepository) Create(ctx context.Context, sku, name, unit string) (models.Product, error) {

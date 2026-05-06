@@ -62,6 +62,7 @@ func main() {
 		batchRepo,
 	)
 	authService := service.NewAuthService(userRepo, userSessionRepo)
+	productInventoryService := service.NewProductInventoryService(productRepo)
 	adminService := service.NewAdminService(
 		productRepo,
 		rackRepo,
@@ -100,6 +101,7 @@ func main() {
 	moveBatchHandler := handler.NewMoveBatchHandler(moveBatchService)
 	labelHandler := handler.NewLabelHandler(labelService)
 	authHandler := handler.NewAuthHandler(authService)
+	productInventoryHandler := handler.NewProductInventoryHandler(productInventoryService)
 	adminHandler := handler.NewAdminHandler(adminService)
 	authMiddleware := handler.NewAuthMiddleware(authService)
 
@@ -176,6 +178,24 @@ func main() {
 		switch r.Method {
 		case http.MethodPost:
 			scanHandler.Execute(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/products/search", authMiddleware.RequireAuthenticated(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			productInventoryHandler.SearchProducts(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/products/locations", authMiddleware.RequireAuthenticated(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			productInventoryHandler.GetProductLocations(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
