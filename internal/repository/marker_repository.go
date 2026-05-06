@@ -186,3 +186,21 @@ WHERE object_type = $1::object_type
 
 	return nil
 }
+
+func (r *MarkerRepository) DeleteByObjectIDs(ctx context.Context, objectType string, objectIDs []int64) error {
+	if len(objectIDs) == 0 {
+		return nil
+	}
+
+	const query = `
+DELETE FROM markers
+WHERE object_type = $1::object_type
+  AND object_id = ANY($2)
+`
+
+	if _, err := r.db.Exec(ctx, query, strings.TrimSpace(objectType), objectIDs); err != nil {
+		return fmt.Errorf("delete markers by object ids: %w", err)
+	}
+
+	return nil
+}

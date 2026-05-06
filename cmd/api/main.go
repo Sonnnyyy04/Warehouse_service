@@ -92,6 +92,7 @@ func main() {
 		operationHistoryService,
 		pool,
 	)
+	outboundShipmentService := service.NewOutboundShipmentService(pool)
 
 	objectHandler := handler.NewObjectHandler(objectService)
 	scanEventHandler := handler.NewScanEventHandler(scanEventService)
@@ -99,6 +100,7 @@ func main() {
 	scanHandler := handler.NewScanHandler(scanService)
 	moveBoxHandler := handler.NewMoveBoxHandler(moveBoxService)
 	moveBatchHandler := handler.NewMoveBatchHandler(moveBatchService)
+	outboundShipmentHandler := handler.NewOutboundShipmentHandler(outboundShipmentService)
 	labelHandler := handler.NewLabelHandler(labelService)
 	authHandler := handler.NewAuthHandler(authService)
 	productInventoryHandler := handler.NewProductInventoryHandler(productInventoryService)
@@ -149,6 +151,15 @@ func main() {
 		switch r.Method {
 		case http.MethodPost:
 			moveBatchHandler.Execute(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/v1/outbound/shipments/complete", authMiddleware.RequireAuthenticated(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			outboundShipmentHandler.Complete(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

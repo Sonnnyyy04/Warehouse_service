@@ -227,6 +227,28 @@ func (r *BoxRepository) MoveToStorageCell(ctx context.Context, boxID, storageCel
 	return nil
 }
 
+func (r *BoxRepository) MarkShipped(ctx context.Context, boxIDs []int64) error {
+	if len(boxIDs) == 0 {
+		return nil
+	}
+
+	cmd, err := r.db.Exec(ctx, `
+		UPDATE boxes
+		SET status = 'shipped',
+		    storage_cell_id = NULL
+		WHERE id = ANY($1)
+	`, boxIDs)
+	if err != nil {
+		return fmt.Errorf("mark boxes shipped: %w", err)
+	}
+
+	if int(cmd.RowsAffected()) != len(boxIDs) {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
 func (r *BoxRepository) HasAnyInStorageCell(ctx context.Context, storageCellID int64) (bool, error) {
 	const query = `
 SELECT EXISTS (

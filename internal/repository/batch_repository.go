@@ -137,6 +137,52 @@ WHERE id = ANY($1)
 	return batches, nil
 }
 
+func (r *BatchRepository) ListByBoxIDsAndProductID(ctx context.Context, boxIDs []int64, productID int64) ([]models.Batch, error) {
+	if len(boxIDs) == 0 {
+		return []models.Batch{}, nil
+	}
+
+	const query = `
+SELECT id, code, product_id, quantity, status, box_id, storage_cell_id
+FROM batches
+WHERE box_id = ANY($1)
+  AND product_id = $2
+  AND quantity > 0
+  AND status = 'active'
+ORDER BY box_id, id
+`
+
+	rows, err := r.db.Query(ctx, query, boxIDs, productID)
+	if err != nil {
+		return nil, fmt.Errorf("list batches by box ids and product id: %w", err)
+	}
+	defer rows.Close()
+
+	batches := make([]models.Batch, 0)
+
+	for rows.Next() {
+		var batch models.Batch
+		if err := rows.Scan(
+			&batch.ID,
+			&batch.Code,
+			&batch.ProductID,
+			&batch.Quantity,
+			&batch.Status,
+			&batch.BoxID,
+			&batch.StorageCellID,
+		); err != nil {
+			return nil, fmt.Errorf("scan batch by box/product row: %w", err)
+		}
+		batches = append(batches, batch)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate batch by box/product rows: %w", err)
+	}
+
+	return batches, nil
+}
+
 func (r *BatchRepository) HasOtherProductInBox(
 	ctx context.Context,
 	boxID int64,
@@ -422,6 +468,27 @@ WHERE id = $1
 		return fmt.Errorf("delete batch: %w", err)
 	}
 	if commandTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *BatchRepository) DeleteByIDs(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	const query = `
+DELETE FROM batches
+WHERE id = ANY($1)
+`
+
+	commandTag, err := r.db.Exec(ctx, query, ids)
+	if err != nil {
+		return fmt.Errorf("delete batches: %w", err)
+	}
+	if int(commandTag.RowsAffected()) != len(ids) {
 		return ErrNotFound
 	}
 
