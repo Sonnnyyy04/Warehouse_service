@@ -191,6 +191,10 @@ func (s *ObjectService) buildBoxCard(ctx context.Context, marker models.Marker) 
 		if err == nil {
 			locationCode = &cell.Code
 			locationType = stringPtr("storage_cell")
+			if cell.RackCode != nil {
+				parentCode = cell.RackCode
+				parentType = stringPtr("rack")
+			}
 		}
 	}
 
