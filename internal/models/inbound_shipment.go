@@ -49,6 +49,10 @@ type InboundShipmentBox struct {
 	BatchCode       *string `json:"batch_code,omitempty"`
 	BoxMarkerCode   *string `json:"box_marker_code,omitempty"`
 	BatchMarkerCode *string `json:"batch_marker_code,omitempty"`
+	StorageCellID   *int64  `json:"storage_cell_id,omitempty"`
+	StorageCellCode *string `json:"storage_cell_code,omitempty"`
+	StorageCellName *string `json:"storage_cell_name,omitempty"`
+	RackCode        *string `json:"rack_code,omitempty"`
 	PlannedQuantity int32   `json:"planned_quantity"`
 	Status          string  `json:"status"`
 }

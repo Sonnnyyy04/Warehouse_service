@@ -358,12 +358,21 @@ SELECT
     bt.code,
     bm.marker_code,
     btm.marker_code,
+    bx.storage_cell_id,
+    sc.code,
+    sc.name,
+    r.code,
     sb.planned_quantity,
-    sb.status
+    CASE
+        WHEN sb.box_id IS NOT NULL AND bx.storage_cell_id IS NOT NULL THEN 'placed'
+        ELSE sb.status
+    END AS status
 FROM inbound_shipment_boxes sb
 JOIN inbound_shipment_items si ON si.id = sb.shipment_item_id
 LEFT JOIN boxes bx ON bx.id = sb.box_id
 LEFT JOIN batches bt ON bt.id = sb.batch_id
+LEFT JOIN storage_cells sc ON sc.id = bx.storage_cell_id
+LEFT JOIN racks r ON r.id = sc.rack_id
 LEFT JOIN markers bm ON bm.object_type = 'box'::object_type AND bm.object_id = sb.box_id
 LEFT JOIN markers btm ON btm.object_type = 'batch'::object_type AND btm.object_id = sb.batch_id
 WHERE si.shipment_id = $1
@@ -388,6 +397,10 @@ ORDER BY sb.id
 			&box.BatchCode,
 			&box.BoxMarkerCode,
 			&box.BatchMarkerCode,
+			&box.StorageCellID,
+			&box.StorageCellCode,
+			&box.StorageCellName,
+			&box.RackCode,
 			&box.PlannedQuantity,
 			&box.Status,
 		); err != nil {
