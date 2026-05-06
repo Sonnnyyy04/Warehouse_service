@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -259,8 +260,8 @@ func (s *AdminService) CreateProductForInboundShipmentItem(ctx context.Context, 
 	return updated, nil
 }
 
-func (s *AdminService) GenerateInboundShipment(ctx context.Context, shipmentID int64) (models.InboundShipmentGenerateResult, error) {
-	if shipmentID <= 0 {
+func (s *AdminService) GenerateInboundShipment(ctx context.Context, input GenerateInboundShipmentInput) (models.InboundShipmentGenerateResult, error) {
+	if input.ShipmentID <= 0 {
 		return models.InboundShipmentGenerateResult{}, ErrInvalidAdminInput
 	}
 
@@ -276,8 +277,10 @@ func (s *AdminService) GenerateInboundShipment(ctx context.Context, shipmentID i
 	boxRepo := repository.NewBoxRepositoryWithQuerier(tx)
 	batchRepo := repository.NewBatchRepositoryWithQuerier(tx)
 	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+	operationRepo := repository.NewOperationHistoryRepositoryWithQuerier(tx)
+	operationWriter := NewOperationHistoryService(operationRepo)
 
-	shipment, err := shipmentRepo.GetByID(ctx, shipmentID)
+	shipment, err := shipmentRepo.GetByID(ctx, input.ShipmentID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.InboundShipmentGenerateResult{}, ErrInvalidAdminReference
@@ -291,11 +294,11 @@ func (s *AdminService) GenerateInboundShipment(ctx context.Context, shipmentID i
 		return models.InboundShipmentGenerateResult{}, ErrInboundShipmentUnresolved
 	}
 
-	items, err := shipmentRepo.ListItems(ctx, shipmentID)
+	items, err := shipmentRepo.ListItems(ctx, input.ShipmentID)
 	if err != nil {
 		return models.InboundShipmentGenerateResult{}, err
 	}
-	boxes, err := shipmentRepo.ListBoxes(ctx, shipmentID)
+	boxes, err := shipmentRepo.ListBoxes(ctx, input.ShipmentID)
 	if err != nil {
 		return models.InboundShipmentGenerateResult{}, err
 	}
@@ -340,7 +343,33 @@ func (s *AdminService) GenerateInboundShipment(ctx context.Context, shipmentID i
 		}
 	}
 
-	if err := shipmentRepo.UpdateStatus(ctx, shipmentID, "received"); err != nil {
+	if err := shipmentRepo.UpdateStatus(ctx, input.ShipmentID, "received"); err != nil {
+		return models.InboundShipmentGenerateResult{}, err
+	}
+
+	detailsBytes, err := json.Marshal(map[string]any{
+		"action":          "inbound_shipment_generated",
+		"shipment_id":     shipment.ID,
+		"shipment_code":   shipment.Code,
+		"supplier_name":   shipment.SupplierName,
+		"boxes_count":     len(boxes),
+		"total_items":     shipment.TotalItems,
+		"total_quantity":  shipment.TotalQuantity,
+		"generated_boxes": len(boxes),
+	})
+	if err != nil {
+		return models.InboundShipmentGenerateResult{}, err
+	}
+	rawDetails := json.RawMessage(detailsBytes)
+
+	if _, err := operationWriter.Create(ctx, CreateOperationInput{
+		ObjectType:    "product",
+		ObjectID:      shipment.ID,
+		OperationType: "inbound_shipment_generated",
+		UserID:        input.UserID,
+		Actor:         input.Actor,
+		Details:       &rawDetails,
+	}); err != nil {
 		return models.InboundShipmentGenerateResult{}, err
 	}
 
@@ -348,7 +377,7 @@ func (s *AdminService) GenerateInboundShipment(ctx context.Context, shipmentID i
 		return models.InboundShipmentGenerateResult{}, fmt.Errorf("commit generate shipment tx: %w", err)
 	}
 
-	updatedShipment, generatedBoxes, err := s.GetInboundShipment(ctx, shipmentID)
+	updatedShipment, generatedBoxes, err := s.GetInboundShipment(ctx, input.ShipmentID)
 	if err != nil {
 		return models.InboundShipmentGenerateResult{}, err
 	}

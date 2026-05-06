@@ -151,6 +151,9 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 		if batch.BoxID != nil && *batch.BoxID == box.ID {
 			return models.MoveBatchResult{}, ErrBatchAlreadyInTargetBox
 		}
+		if box.Status != "active" {
+			return models.MoveBatchResult{}, ErrBoxNotActive
+		}
 
 		hasMixedProducts, err := batchRepo.HasOtherProductInBox(ctx, box.ID, batch.ProductID, &batch.ID)
 		if err != nil {

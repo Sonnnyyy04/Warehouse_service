@@ -216,6 +216,12 @@ type CreateProductForShipmentItemInput struct {
 	Unit   string
 }
 
+type GenerateInboundShipmentInput struct {
+	ShipmentID int64
+	UserID     *int64
+	Actor      *models.UserSummary
+}
+
 type AdminService struct {
 	productRepo      AdminProductRepository
 	rackRepo         AdminRackRepository

@@ -43,7 +43,7 @@ type AdminUseCase interface {
 	ImportInboundShipment(ctx context.Context, reader io.Reader) (models.InboundShipmentImportResult, error)
 	LinkInboundShipmentItem(ctx context.Context, input service.LinkShipmentItemInput) (models.InboundShipmentItem, error)
 	CreateProductForInboundShipmentItem(ctx context.Context, input service.CreateProductForShipmentItemInput) (models.InboundShipmentItem, error)
-	GenerateInboundShipment(ctx context.Context, shipmentID int64) (models.InboundShipmentGenerateResult, error)
+	GenerateInboundShipment(ctx context.Context, input service.GenerateInboundShipmentInput) (models.InboundShipmentGenerateResult, error)
 }
 
 type AdminHandler struct {
@@ -1147,13 +1147,23 @@ func (h *AdminHandler) GenerateInboundShipmentAPI(w http.ResponseWriter, r *http
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
+	authUser, ok := userFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
 	var req deleteEntityRequest
 	if err := decodeJSONBody(r.Body, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
-	result, err := h.adminUseCase.GenerateInboundShipment(ctx, req.ID)
+	result, err := h.adminUseCase.GenerateInboundShipment(ctx, service.GenerateInboundShipmentInput{
+		ShipmentID: req.ID,
+		UserID:     &authUser.ID,
+		Actor:      service.UserSummaryFromUser(authUser),
+	})
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):

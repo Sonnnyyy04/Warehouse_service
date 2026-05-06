@@ -95,6 +95,10 @@ func (h *MoveBoxHandler) Execute(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{
 				"error": "box already in target cell",
 			})
+		case errors.Is(err, service.ErrBoxNotActive):
+			writeJSON(w, http.StatusConflict, map[string]string{
+				"error": "box is not active",
+			})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{
 				"error": "storage cell is occupied",
