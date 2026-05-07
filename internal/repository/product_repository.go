@@ -26,9 +26,10 @@ func NewProductRepositoryWithQuerier(db Querier) *ProductRepository {
 
 func (r *ProductRepository) GetByID(ctx context.Context, id int64) (models.Product, error) {
 	const query = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
+LEFT JOIN boxes bx ON bx.id = b.box_id
 WHERE p.id = $1
 GROUP BY p.id, p.sku, p.name, p.unit
 `
@@ -54,9 +55,10 @@ GROUP BY p.id, p.sku, p.name, p.unit
 
 func (r *ProductRepository) GetByName(ctx context.Context, name string) (models.Product, error) {
 	const query = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
+LEFT JOIN boxes bx ON bx.id = b.box_id
 WHERE LOWER(p.name) = LOWER($1)
 GROUP BY p.id, p.sku, p.name, p.unit
 LIMIT 1
@@ -83,9 +85,10 @@ LIMIT 1
 
 func (r *ProductRepository) GetBySKU(ctx context.Context, sku string) (models.Product, error) {
 	const query = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
+LEFT JOIN boxes bx ON bx.id = b.box_id
 WHERE LOWER(p.sku) = LOWER($1)
 GROUP BY p.id, p.sku, p.name, p.unit
 LIMIT 1
@@ -112,9 +115,10 @@ LIMIT 1
 
 func (r *ProductRepository) List(ctx context.Context, limit int32) ([]models.Product, error) {
 	const query = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
+LEFT JOIN boxes bx ON bx.id = b.box_id
 GROUP BY p.id, p.sku, p.name, p.unit
 ORDER BY p.id
 LIMIT $1
@@ -153,9 +157,10 @@ LIMIT $1
 
 func (r *ProductRepository) Search(ctx context.Context, query string, limit int32) ([]models.Product, error) {
 	const sql = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
+LEFT JOIN boxes bx ON bx.id = b.box_id
 WHERE $1 = ''
    OR LOWER(p.sku) LIKE '%' || LOWER($1) || '%'
    OR LOWER(p.name) LIKE '%' || LOWER($1) || '%'
@@ -201,9 +206,10 @@ func (r *ProductRepository) ListByIDs(ctx context.Context, ids []int64) ([]model
 	}
 
 	const query = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
+LEFT JOIN boxes bx ON bx.id = b.box_id
 WHERE p.id = ANY($1)
 GROUP BY p.id, p.sku, p.name, p.unit
 `
@@ -346,9 +352,10 @@ WITH updated AS (
 	WHERE id = $1
 	RETURNING id, sku, name, unit
 )
-SELECT u.id, u.sku, u.name, u.unit, COALESCE(SUM(b.quantity), 0) AS total_quantity
+SELECT u.id, u.sku, u.name, u.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
 FROM updated u
 LEFT JOIN batches b ON b.product_id = u.id AND b.status = 'active' AND b.quantity > 0
+LEFT JOIN boxes bx ON bx.id = b.box_id
 GROUP BY u.id, u.sku, u.name, u.unit
 `
 

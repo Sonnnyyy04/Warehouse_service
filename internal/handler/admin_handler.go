@@ -240,6 +240,10 @@ func (h *AdminHandler) CreateProductAPI(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "initial quantity requires exactly one target: box_code or storage_cell_code"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "box or storage cell not found"})
+		case errors.Is(err, service.ErrBoxNotActive):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "box is not active"})
+		case errors.Is(err, service.ErrStorageCellNotActive):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell is not active"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty for a new product"})
 		case errors.Is(err, service.ErrStorageCellProductConflict):
@@ -658,6 +662,8 @@ func (h *AdminHandler) CreateBoxAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "storage cell not found"})
+		case errors.Is(err, service.ErrStorageCellNotActive):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell is not active"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, service.ErrStorageCellProductConflict):
@@ -697,6 +703,8 @@ func (h *AdminHandler) UpdateBoxAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "box or storage cell not found"})
+		case errors.Is(err, service.ErrStorageCellNotActive):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell is not active"})
 		case errors.Is(err, service.ErrAdminTargetOccupied):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "target storage cell must be empty"})
 		case errors.Is(err, service.ErrStorageCellProductConflict):
@@ -800,6 +808,10 @@ func (h *AdminHandler) CreateBatchAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "product, box or storage cell not found"})
+		case errors.Is(err, service.ErrBoxNotActive):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "box is not active"})
+		case errors.Is(err, service.ErrStorageCellNotActive):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell is not active"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "batch code already exists"})
 		default:
@@ -848,6 +860,10 @@ func (h *AdminHandler) UpdateBatchAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell can store only one product"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "product, box or storage cell not found"})
+		case errors.Is(err, service.ErrBoxNotActive):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "box is not active"})
+		case errors.Is(err, service.ErrStorageCellNotActive):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "storage cell is not active"})
 		case errors.Is(err, repository.ErrConflict):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "batch code already exists"})
 		default:

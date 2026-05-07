@@ -266,6 +266,24 @@ SELECT EXISTS (
 	return exists, nil
 }
 
+func (r *BoxRepository) HasOtherInStorageCell(ctx context.Context, storageCellID int64, excludeBoxID int64) (bool, error) {
+	const query = `
+SELECT EXISTS (
+    SELECT 1
+    FROM boxes
+    WHERE storage_cell_id = $1
+      AND id <> $2
+)
+`
+
+	var exists bool
+	if err := r.db.QueryRow(ctx, query, storageCellID, excludeBoxID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check storage cell other box occupancy: %w", err)
+	}
+
+	return exists, nil
+}
+
 func (r *BoxRepository) GetContentStats(ctx context.Context, boxID int64) (models.ObjectContentStats, error) {
 	const query = `
 WITH box_batches AS (

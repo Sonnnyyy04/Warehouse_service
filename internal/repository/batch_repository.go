@@ -195,6 +195,8 @@ SELECT EXISTS (
     FROM batches
     WHERE box_id = $1
       AND product_id <> $2
+      AND status = 'active'
+      AND quantity > 0
       AND ($3::BIGINT IS NULL OR id <> $3)
 )
 `
@@ -212,6 +214,8 @@ func (r *BatchRepository) ListProductIDsInBox(ctx context.Context, boxID int64) 
 SELECT DISTINCT product_id
 FROM batches
 WHERE box_id = $1
+  AND status = 'active'
+  AND quantity > 0
 ORDER BY product_id
 `
 
@@ -249,6 +253,8 @@ SELECT EXISTS (
     FROM batches b
     WHERE b.storage_cell_id = $1
       AND b.product_id <> $2
+      AND b.status = 'active'
+      AND b.quantity > 0
       AND ($3::BIGINT IS NULL OR b.id <> $3)
     UNION ALL
     SELECT 1
@@ -256,6 +262,9 @@ SELECT EXISTS (
     JOIN boxes bx ON bx.id = b.box_id
     WHERE bx.storage_cell_id = $1
       AND b.product_id <> $2
+      AND b.status = 'active'
+      AND b.quantity > 0
+      AND bx.status = 'active'
       AND ($3::BIGINT IS NULL OR b.id <> $3)
       AND ($4::BIGINT IS NULL OR bx.id <> $4)
 )
@@ -275,6 +284,8 @@ SELECT EXISTS (
     SELECT 1
     FROM batches
     WHERE box_id = $1
+      AND status = 'active'
+      AND quantity > 0
 )
 `
 
@@ -292,6 +303,8 @@ SELECT EXISTS (
     SELECT 1
     FROM batches
     WHERE storage_cell_id = $1
+      AND status = 'active'
+      AND quantity > 0
 )
 `
 
@@ -309,6 +322,8 @@ SELECT EXISTS (
     SELECT 1
     FROM batches
     WHERE product_id = $1
+      AND status = 'active'
+      AND quantity > 0
 )
 `
 
