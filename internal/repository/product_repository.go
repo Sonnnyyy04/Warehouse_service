@@ -266,6 +266,7 @@ WHERE b.product_id = $1
   AND b.quantity > 0
   AND b.status = 'active'
   AND bx.status = 'active'
+  AND bx.storage_cell_id IS NOT NULL
 ORDER BY rck.code NULLS LAST, sc.code NULLS LAST, bx.code, b.code
 `
 

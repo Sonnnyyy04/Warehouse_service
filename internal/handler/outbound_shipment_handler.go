@@ -62,6 +62,8 @@ func (h *OutboundShipmentHandler) Complete(w http.ResponseWriter, r *http.Reques
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "box_marker_codes must point to boxes"})
 		case errors.Is(err, service.ErrOutboundShipmentBoxNotFound):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "selected box not found or does not contain product"})
+		case errors.Is(err, service.ErrOutboundShipmentBoxNotPlaced):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "selected box is not placed"})
 		case errors.Is(err, service.ErrOutboundShipmentNotEnoughStock):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "selected boxes do not cover requested quantity"})
 		case errors.Is(err, service.ErrObjectNotFound):

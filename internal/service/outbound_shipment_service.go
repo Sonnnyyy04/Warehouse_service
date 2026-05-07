@@ -15,6 +15,7 @@ var (
 	ErrInvalidOutboundShipmentPayload = errors.New("invalid outbound shipment payload")
 	ErrOutboundShipmentBoxNotFound    = errors.New("outbound shipment box not found")
 	ErrOutboundShipmentNotEnoughStock = errors.New("outbound shipment not enough stock")
+	ErrOutboundShipmentBoxNotPlaced   = errors.New("outbound shipment box not placed")
 )
 
 type OutboundShipmentInput struct {
@@ -92,6 +93,9 @@ func (s *OutboundShipmentService) Complete(ctx context.Context, input OutboundSh
 	for _, box := range boxes {
 		if box.Status != "active" {
 			return models.OutboundShipmentResult{}, ErrOutboundShipmentBoxNotFound
+		}
+		if box.StorageCellID == nil {
+			return models.OutboundShipmentResult{}, ErrOutboundShipmentBoxNotPlaced
 		}
 		boxByID[box.ID] = box
 	}
