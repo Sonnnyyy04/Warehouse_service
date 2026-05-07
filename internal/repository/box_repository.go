@@ -272,6 +272,8 @@ WITH box_batches AS (
     SELECT b.product_id, b.quantity
     FROM batches b
     WHERE b.box_id = $1
+      AND b.status = 'active'
+      AND b.quantity > 0
 ),
 product_counts AS (
     SELECT COUNT(DISTINCT product_id)::INT AS products_count

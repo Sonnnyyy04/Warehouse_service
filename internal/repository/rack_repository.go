@@ -213,12 +213,17 @@ rack_boxes AS (
     SELECT id
     FROM boxes
     WHERE storage_cell_id IN (SELECT id FROM rack_cells)
+      AND status = 'active'
 ),
 rack_batches AS (
     SELECT b.product_id, b.quantity
     FROM batches b
-    WHERE b.storage_cell_id IN (SELECT id FROM rack_cells)
-       OR b.box_id IN (SELECT id FROM rack_boxes)
+    WHERE b.status = 'active'
+      AND b.quantity > 0
+      AND (
+          b.storage_cell_id IN (SELECT id FROM rack_cells)
+          OR b.box_id IN (SELECT id FROM rack_boxes)
+      )
 ),
 product_counts AS (
     SELECT COUNT(DISTINCT product_id)::INT AS products_count
