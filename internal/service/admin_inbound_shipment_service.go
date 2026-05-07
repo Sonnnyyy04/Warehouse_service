@@ -69,7 +69,7 @@ func (s *AdminService) ImportInboundShipment(ctx context.Context, reader io.Read
 		return models.InboundShipmentImportResult{}, err
 	}
 
-	supplierName := rows[0].SupplierName
+	supplierName := shipmentSupplierName(rows)
 	shipmentCode := fmt.Sprintf("SHIP-%s", time.Now().Format("20060102-150405"))
 
 	tx, err := s.txPool.Begin(ctx)
@@ -118,6 +118,7 @@ func (s *AdminService) ImportInboundShipment(ctx context.Context, reader io.Read
 		item, err := shipmentRepo.CreateItem(ctx, models.InboundShipmentItem{
 			ShipmentID:      shipment.ID,
 			ProductID:       productID,
+			SupplierName:    row.SupplierName,
 			SupplierArticle: row.SupplierArticle,
 			ProductName:     row.ProductName,
 			Unit:            row.Unit,
@@ -174,10 +175,6 @@ func (s *AdminService) LinkInboundShipmentItem(ctx context.Context, input LinkSh
 		}
 		return models.InboundShipmentItem{}, err
 	}
-	shipment, err := shipmentRepo.GetByID(ctx, item.ShipmentID)
-	if err != nil {
-		return models.InboundShipmentItem{}, err
-	}
 	if _, err := productRepo.GetByID(ctx, input.ProductID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.InboundShipmentItem{}, ErrInvalidAdminReference
@@ -185,7 +182,7 @@ func (s *AdminService) LinkInboundShipmentItem(ctx context.Context, input LinkSh
 		return models.InboundShipmentItem{}, err
 	}
 
-	if _, err := aliasRepo.UpsertSupplierArticle(ctx, input.ProductID, shipment.SupplierName, item.SupplierArticle); err != nil {
+	if _, err := aliasRepo.UpsertSupplierArticle(ctx, input.ProductID, item.SupplierName, item.SupplierArticle); err != nil {
 		return models.InboundShipmentItem{}, err
 	}
 
@@ -232,11 +229,6 @@ func (s *AdminService) CreateProductForInboundShipmentItem(ctx context.Context, 
 		}
 		return models.InboundShipmentItem{}, err
 	}
-	shipment, err := shipmentRepo.GetByID(ctx, item.ShipmentID)
-	if err != nil {
-		return models.InboundShipmentItem{}, err
-	}
-
 	product, err := productRepo.Create(ctx, sku, name, unit)
 	if err != nil {
 		return models.InboundShipmentItem{}, err
@@ -244,7 +236,7 @@ func (s *AdminService) CreateProductForInboundShipmentItem(ctx context.Context, 
 	if _, err := markerRepo.Create(ctx, buildMarkerCode("product", product.ID), "product", product.ID); err != nil {
 		return models.InboundShipmentItem{}, err
 	}
-	if _, err := aliasRepo.UpsertSupplierArticle(ctx, product.ID, shipment.SupplierName, item.SupplierArticle); err != nil {
+	if _, err := aliasRepo.UpsertSupplierArticle(ctx, product.ID, item.SupplierName, item.SupplierArticle); err != nil {
 		return models.InboundShipmentItem{}, err
 	}
 
@@ -532,4 +524,19 @@ func splitShipmentQuantities(totalQuantity int32, boxesCount int32, quantityPerB
 	}
 
 	return quantities
+}
+
+func shipmentSupplierName(rows []inboundShipmentImportRow) string {
+	if len(rows) == 0 {
+		return "unknown"
+	}
+
+	first := rows[0].SupplierName
+	for _, row := range rows[1:] {
+		if !strings.EqualFold(first, row.SupplierName) {
+			return "multiple suppliers"
+		}
+	}
+
+	return first
 }

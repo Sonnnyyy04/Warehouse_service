@@ -161,6 +161,7 @@ func (r *InboundShipmentRepository) CreateItem(ctx context.Context, item models.
 INSERT INTO inbound_shipment_items (
     shipment_id,
     product_id,
+    supplier_name,
     supplier_article,
     product_name,
     unit,
@@ -169,8 +170,8 @@ INSERT INTO inbound_shipment_items (
     quantity_per_box,
     status
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, shipment_id, product_id, supplier_article, product_name, unit, total_quantity, boxes_count, quantity_per_box, status, created_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, shipment_id, product_id, supplier_name, supplier_article, product_name, unit, total_quantity, boxes_count, quantity_per_box, status, created_at
 `
 
 	var created models.InboundShipmentItem
@@ -179,6 +180,7 @@ RETURNING id, shipment_id, product_id, supplier_article, product_name, unit, tot
 		query,
 		item.ShipmentID,
 		item.ProductID,
+		item.SupplierName,
 		item.SupplierArticle,
 		item.ProductName,
 		item.Unit,
@@ -190,6 +192,7 @@ RETURNING id, shipment_id, product_id, supplier_article, product_name, unit, tot
 		&created.ID,
 		&created.ShipmentID,
 		&created.ProductID,
+		&created.SupplierName,
 		&created.SupplierArticle,
 		&created.ProductName,
 		&created.Unit,
@@ -212,6 +215,7 @@ SELECT
     i.shipment_id,
     i.product_id,
     p.sku,
+    i.supplier_name,
     i.supplier_article,
     i.product_name,
     i.unit,
@@ -240,6 +244,7 @@ ORDER BY i.id
 			&item.ShipmentID,
 			&item.ProductID,
 			&item.ProductSKU,
+			&item.SupplierName,
 			&item.SupplierArticle,
 			&item.ProductName,
 			&item.Unit,
@@ -268,6 +273,7 @@ SELECT
     i.shipment_id,
     i.product_id,
     p.sku,
+    i.supplier_name,
     i.supplier_article,
     i.product_name,
     i.unit,
@@ -287,6 +293,7 @@ WHERE i.id = $1
 		&item.ShipmentID,
 		&item.ProductID,
 		&item.ProductSKU,
+		&item.SupplierName,
 		&item.SupplierArticle,
 		&item.ProductName,
 		&item.Unit,
@@ -312,9 +319,9 @@ WITH updated AS (
     SET product_id = $2,
         status = 'matched'
     WHERE id = $1
-    RETURNING id, shipment_id, product_id, supplier_article, product_name, unit, total_quantity, boxes_count, quantity_per_box, status, created_at
+    RETURNING id, shipment_id, product_id, supplier_name, supplier_article, product_name, unit, total_quantity, boxes_count, quantity_per_box, status, created_at
 )
-SELECT u.id, u.shipment_id, u.product_id, p.sku, u.supplier_article, u.product_name, u.unit, u.total_quantity, u.boxes_count, u.quantity_per_box, u.status, u.created_at
+SELECT u.id, u.shipment_id, u.product_id, p.sku, u.supplier_name, u.supplier_article, u.product_name, u.unit, u.total_quantity, u.boxes_count, u.quantity_per_box, u.status, u.created_at
 FROM updated u
 LEFT JOIN products p ON p.id = u.product_id
 `
@@ -325,6 +332,7 @@ LEFT JOIN products p ON p.id = u.product_id
 		&item.ShipmentID,
 		&item.ProductID,
 		&item.ProductSKU,
+		&item.SupplierName,
 		&item.SupplierArticle,
 		&item.ProductName,
 		&item.Unit,

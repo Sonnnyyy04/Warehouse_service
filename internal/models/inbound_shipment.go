@@ -31,6 +31,7 @@ type InboundShipmentItem struct {
 	ShipmentID      int64     `json:"shipment_id"`
 	ProductID       *int64    `json:"product_id,omitempty"`
 	ProductSKU      *string   `json:"product_sku,omitempty"`
+	SupplierName    string    `json:"supplier_name"`
 	SupplierArticle string    `json:"supplier_article"`
 	ProductName     string    `json:"product_name"`
 	Unit            string    `json:"unit"`
