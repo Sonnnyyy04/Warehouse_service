@@ -17,6 +17,7 @@ var (
 	ErrInvalidBoxTargetMarkerType   = errors.New("invalid box target marker type")
 	ErrBoxAlreadyInTargetCell       = errors.New("box already in target cell")
 	ErrBoxNotActive                 = errors.New("box is not active")
+	ErrStorageCellNotActive         = errors.New("storage cell is not active")
 )
 
 type MoveBoxMarkerRepository interface {
@@ -195,6 +196,9 @@ func (s *MoveBoxService) moveBoxToStorageCell(
 
 	if box.StorageCellID != nil && *box.StorageCellID == targetCell.ID {
 		return models.ObjectCard{}, nil, ErrBoxAlreadyInTargetCell
+	}
+	if targetCell.Status != "active" {
+		return models.ObjectCard{}, nil, ErrStorageCellNotActive
 	}
 
 	if err := ensureStorageCellCanAcceptBox(ctx, boxRepo, batchRepo, targetCell.ID, box.ID); err != nil {

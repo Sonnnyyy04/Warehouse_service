@@ -209,6 +209,9 @@ func (s *MoveBatchService) Execute(ctx context.Context, input MoveBatchInput) (m
 			}
 			return models.MoveBatchResult{}, err
 		}
+		if cell.Status != "active" {
+			return models.MoveBatchResult{}, ErrStorageCellNotActive
+		}
 
 		if batch.BoxID == nil && batch.StorageCellID != nil && *batch.StorageCellID == cell.ID {
 			return models.MoveBatchResult{}, ErrBatchAlreadyInTargetCell

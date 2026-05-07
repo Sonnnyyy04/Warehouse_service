@@ -84,6 +84,10 @@ func (h *MoveBatchHandler) Execute(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{
 				"error": "box is not active",
 			})
+		case errors.Is(err, service.ErrStorageCellNotActive):
+			writeJSON(w, http.StatusConflict, map[string]string{
+				"error": "storage cell is not active",
+			})
 		case errors.Is(err, service.ErrMixedBoxProducts):
 			writeJSON(w, http.StatusConflict, map[string]string{
 				"error": "box can store only one product",
