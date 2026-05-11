@@ -79,6 +79,7 @@ func (r *BoxRepository) List(ctx context.Context, limit int32) ([]models.Box, er
 	const query = `
 SELECT id, code, status, storage_cell_id
 FROM boxes
+WHERE status = 'active'
 ORDER BY id
 LIMIT $1
 `

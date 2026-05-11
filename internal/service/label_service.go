@@ -377,6 +377,9 @@ func (s *LabelService) preloadLabelResolver(ctx context.Context, markers []model
 			return nil, err
 		}
 		for _, box := range boxes {
+			if box.Status != "active" {
+				continue
+			}
 			boxByID[box.ID] = box
 			boxIDs = appendUniqueInt64(boxIDs, box.ID)
 			if box.StorageCellID != nil {
@@ -416,6 +419,9 @@ func (s *LabelService) preloadLabelResolver(ctx context.Context, markers []model
 				return nil, err
 			}
 			for _, box := range boxes {
+				if box.Status != "active" {
+					continue
+				}
 				boxByID[box.ID] = box
 				if box.StorageCellID != nil {
 					cellIDs = appendUniqueInt64(cellIDs, *box.StorageCellID)
