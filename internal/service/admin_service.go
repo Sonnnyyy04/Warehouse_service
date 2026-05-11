@@ -102,7 +102,7 @@ type AdminUserRepository interface {
 	ListByRoles(ctx context.Context, roles []string, limit int32) ([]models.User, error)
 	GetByID(ctx context.Context, id int64) (models.User, error)
 	Create(ctx context.Context, login, email, fullName, role, passwordHash string) (models.User, error)
-	Update(ctx context.Context, id int64, fullName, role string, passwordHash *string) (models.User, error)
+	Update(ctx context.Context, id int64, login, fullName, role string, passwordHash *string) (models.User, error)
 	DeleteByID(ctx context.Context, id int64) error
 }
 
@@ -209,6 +209,7 @@ type CreateWorkerInput struct {
 type UpdateWorkerInput struct {
 	Actor    models.User
 	ID       int64
+	Login    string
 	FullName string
 	Password string
 	Role     string
@@ -1182,6 +1183,7 @@ func (s *AdminService) CreateWorker(ctx context.Context, input CreateWorkerInput
 }
 
 func (s *AdminService) UpdateWorker(ctx context.Context, input UpdateWorkerInput) (models.User, error) {
+	login := strings.TrimSpace(strings.ToLower(input.Login))
 	fullName := strings.TrimSpace(input.FullName)
 	password := strings.TrimSpace(input.Password)
 	role := strings.TrimSpace(strings.ToLower(input.Role))
@@ -1189,8 +1191,11 @@ func (s *AdminService) UpdateWorker(ctx context.Context, input UpdateWorkerInput
 		role = "worker"
 	}
 
-	if input.ID <= 0 || fullName == "" {
+	if input.ID <= 0 || login == "" || fullName == "" {
 		return models.User{}, ErrInvalidAdminInput
+	}
+	if !latinLoginPattern.MatchString(login) {
+		return models.User{}, ErrInvalidAdminLogin
 	}
 	if role != "worker" && role != "admin" {
 		return models.User{}, ErrInvalidAdminInput
@@ -1227,7 +1232,7 @@ func (s *AdminService) UpdateWorker(ctx context.Context, input UpdateWorkerInput
 		passwordHash = &hashString
 	}
 
-	user, err := s.userRepo.Update(ctx, input.ID, fullName, role, passwordHash)
+	user, err := s.userRepo.Update(ctx, input.ID, login, fullName, role, passwordHash)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return models.User{}, ErrInvalidAdminReference

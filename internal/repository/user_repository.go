@@ -148,18 +148,20 @@ RETURNING id, login, email, full_name, role, is_super_admin, password_hash
 	return user, nil
 }
 
-func (r *UserRepository) Update(ctx context.Context, id int64, fullName, role string, passwordHash *string) (models.User, error) {
+func (r *UserRepository) Update(ctx context.Context, id int64, login, fullName, role string, passwordHash *string) (models.User, error) {
 	const query = `
 UPDATE users
-SET full_name = $2,
-    role = $3,
-    password_hash = COALESCE($4, password_hash)
+SET login = $2,
+    email = $2 || '@warehouse.local',
+    full_name = $3,
+    role = $4,
+    password_hash = COALESCE($5, password_hash)
 WHERE id = $1
 RETURNING id, login, email, full_name, role, is_super_admin, password_hash
 `
 
 	var user models.User
-	if err := r.pool.QueryRow(ctx, query, id, fullName, role, passwordHash).Scan(
+	if err := r.pool.QueryRow(ctx, query, id, login, fullName, role, passwordHash).Scan(
 		&user.ID,
 		&user.Login,
 		&user.Email,

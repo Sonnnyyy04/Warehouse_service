@@ -65,6 +65,7 @@ type createWorkerRequest struct {
 
 type updateWorkerRequest struct {
 	ID       int64  `json:"id"`
+	Login    string `json:"login"`
 	FullName string `json:"full_name"`
 	Password string `json:"password"`
 	Role     string `json:"role"`
@@ -1000,6 +1001,7 @@ func (h *AdminHandler) UpdateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 	worker, err := h.adminUseCase.UpdateWorker(ctx, service.UpdateWorkerInput{
 		Actor:    authUser,
 		ID:       req.ID,
+		Login:    req.Login,
 		FullName: req.FullName,
 		Password: req.Password,
 		Role:     req.Role,
@@ -1007,7 +1009,9 @@ func (h *AdminHandler) UpdateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "full_name and role are required; role must be admin or worker"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login, full_name and role are required; role must be admin or worker"})
+		case errors.Is(err, service.ErrInvalidAdminLogin):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login must contain only lowercase latin letters"})
 		case errors.Is(err, service.ErrInvalidAdminPassword):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be between 6 and 20 characters"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
