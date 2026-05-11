@@ -26,7 +26,7 @@ func NewProductRepositoryWithQuerier(db Querier) *ProductRepository {
 
 func (r *ProductRepository) GetByID(ctx context.Context, id int64) (models.Product, error) {
 	const query = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE (b.box_id IS NOT NULL AND bx.status = 'active' AND bx.storage_cell_id IS NOT NULL) OR (b.box_id IS NULL AND b.storage_cell_id IS NOT NULL)), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
 LEFT JOIN boxes bx ON bx.id = b.box_id
@@ -55,7 +55,7 @@ GROUP BY p.id, p.sku, p.name, p.unit
 
 func (r *ProductRepository) GetByName(ctx context.Context, name string) (models.Product, error) {
 	const query = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE (b.box_id IS NOT NULL AND bx.status = 'active' AND bx.storage_cell_id IS NOT NULL) OR (b.box_id IS NULL AND b.storage_cell_id IS NOT NULL)), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
 LEFT JOIN boxes bx ON bx.id = b.box_id
@@ -85,7 +85,7 @@ LIMIT 1
 
 func (r *ProductRepository) GetBySKU(ctx context.Context, sku string) (models.Product, error) {
 	const query = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE (b.box_id IS NOT NULL AND bx.status = 'active' AND bx.storage_cell_id IS NOT NULL) OR (b.box_id IS NULL AND b.storage_cell_id IS NOT NULL)), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
 LEFT JOIN boxes bx ON bx.id = b.box_id
@@ -115,7 +115,7 @@ LIMIT 1
 
 func (r *ProductRepository) List(ctx context.Context, limit int32) ([]models.Product, error) {
 	const query = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE (b.box_id IS NOT NULL AND bx.status = 'active' AND bx.storage_cell_id IS NOT NULL) OR (b.box_id IS NULL AND b.storage_cell_id IS NOT NULL)), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
 LEFT JOIN boxes bx ON bx.id = b.box_id
@@ -157,7 +157,7 @@ LIMIT $1
 
 func (r *ProductRepository) Search(ctx context.Context, query string, limit int32) ([]models.Product, error) {
 	const sql = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE (b.box_id IS NOT NULL AND bx.status = 'active' AND bx.storage_cell_id IS NOT NULL) OR (b.box_id IS NULL AND b.storage_cell_id IS NOT NULL)), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
 LEFT JOIN boxes bx ON bx.id = b.box_id
@@ -206,7 +206,7 @@ func (r *ProductRepository) ListByIDs(ctx context.Context, ids []int64) ([]model
 	}
 
 	const query = `
-SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
+SELECT p.id, p.sku, p.name, p.unit, COALESCE(SUM(b.quantity) FILTER (WHERE (b.box_id IS NOT NULL AND bx.status = 'active' AND bx.storage_cell_id IS NOT NULL) OR (b.box_id IS NULL AND b.storage_cell_id IS NOT NULL)), 0) AS total_quantity
 FROM products p
 LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.quantity > 0
 LEFT JOIN boxes bx ON bx.id = b.box_id
@@ -352,7 +352,7 @@ WITH updated AS (
 	WHERE id = $1
 	RETURNING id, sku, name, unit
 )
-SELECT u.id, u.sku, u.name, u.unit, COALESCE(SUM(b.quantity) FILTER (WHERE b.box_id IS NULL OR bx.status = 'active'), 0) AS total_quantity
+SELECT u.id, u.sku, u.name, u.unit, COALESCE(SUM(b.quantity) FILTER (WHERE (b.box_id IS NOT NULL AND bx.status = 'active' AND bx.storage_cell_id IS NOT NULL) OR (b.box_id IS NULL AND b.storage_cell_id IS NOT NULL)), 0) AS total_quantity
 FROM updated u
 LEFT JOIN batches b ON b.product_id = u.id AND b.status = 'active' AND b.quantity > 0
 LEFT JOIN boxes bx ON bx.id = b.box_id
