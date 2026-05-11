@@ -199,10 +199,7 @@ func (s *LabelService) GenerateLabelsPDF(labels []models.Label) ([]byte, error) 
 		pdf.RegisterImageOptionsReader(imageID, options, bytes.NewReader(qrBytes))
 		pdf.ImageOptions(imageID, x+(cardW-qrSize)/2, y+qrY, qrSize, qrSize, false, options, 0, "")
 
-		pdf.SetXY(x+6, y+codeY)
-		pdf.SetFont("dejavu", "B", 15)
-		pdf.SetTextColor(31, 41, 55)
-		pdf.CellFormat(cardW-12, 8, label.Code, "", 0, "C", false, 0, "")
+		drawLabelCode(pdf, label.Code, x+6, y+codeY, cardW-12)
 
 		pdf.SetXY(x+7, y+detailsY)
 		pdf.SetFont("dejavu", "", 8.5)
@@ -582,6 +579,75 @@ func compactLabelDetails(label models.Label) []string {
 		details = append(details, label.Name)
 	}
 	return details
+}
+
+func drawLabelCode(pdf *gofpdf.Fpdf, code string, x, y, width float64) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return
+	}
+
+	pdf.SetTextColor(31, 41, 55)
+	for _, fontSize := range []float64{15, 13, 11, 9} {
+		pdf.SetFont("dejavu", "B", fontSize)
+		if pdf.GetStringWidth(code) <= width {
+			pdf.SetXY(x, y)
+			pdf.CellFormat(width, 8, code, "", 0, "C", false, 0, "")
+			return
+		}
+	}
+
+	lines := splitLabelCode(code, 2)
+	pdf.SetFont("dejavu", "B", 8.5)
+	pdf.SetXY(x, y-1)
+	pdf.MultiCell(width, 4.2, strings.Join(lines, "\n"), "", "C", false)
+}
+
+func splitLabelCode(code string, maxLines int) []string {
+	if maxLines <= 1 {
+		return []string{code}
+	}
+
+	parts := strings.Split(code, "-")
+	if len(parts) <= 1 {
+		return splitStringEvenly(code, maxLines)
+	}
+
+	lines := make([]string, 0, maxLines)
+	current := parts[0]
+	for _, part := range parts[1:] {
+		candidate := current + "-" + part
+		if len(lines) < maxLines-1 && len(candidate) > 18 {
+			lines = append(lines, current+"-")
+			current = part
+			continue
+		}
+		current = candidate
+	}
+	lines = append(lines, current)
+
+	if len(lines) > maxLines {
+		return splitStringEvenly(code, maxLines)
+	}
+	return lines
+}
+
+func splitStringEvenly(value string, maxLines int) []string {
+	if maxLines <= 1 || len(value) <= maxLines {
+		return []string{value}
+	}
+
+	chunkSize := (len(value) + maxLines - 1) / maxLines
+	lines := make([]string, 0, maxLines)
+	for len(value) > 0 && len(lines) < maxLines {
+		if len(value) <= chunkSize || len(lines) == maxLines-1 {
+			lines = append(lines, value)
+			break
+		}
+		lines = append(lines, value[:chunkSize])
+		value = value[chunkSize:]
+	}
+	return lines
 }
 
 func rackLabelDetails(rack models.Rack) []string {
