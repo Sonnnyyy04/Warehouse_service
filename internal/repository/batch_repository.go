@@ -183,6 +183,51 @@ ORDER BY box_id, id
 	return batches, nil
 }
 
+func (r *BatchRepository) ListActiveByBoxIDs(ctx context.Context, boxIDs []int64) ([]models.Batch, error) {
+	if len(boxIDs) == 0 {
+		return []models.Batch{}, nil
+	}
+
+	const query = `
+SELECT id, code, product_id, quantity, status, box_id, storage_cell_id
+FROM batches
+WHERE box_id = ANY($1)
+  AND quantity > 0
+  AND status = 'active'
+ORDER BY box_id, id
+`
+
+	rows, err := r.db.Query(ctx, query, boxIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list active batches by box ids: %w", err)
+	}
+	defer rows.Close()
+
+	batches := make([]models.Batch, 0)
+
+	for rows.Next() {
+		var batch models.Batch
+		if err := rows.Scan(
+			&batch.ID,
+			&batch.Code,
+			&batch.ProductID,
+			&batch.Quantity,
+			&batch.Status,
+			&batch.BoxID,
+			&batch.StorageCellID,
+		); err != nil {
+			return nil, fmt.Errorf("scan active batch by box row: %w", err)
+		}
+		batches = append(batches, batch)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active batches by box rows: %w", err)
+	}
+
+	return batches, nil
+}
+
 func (r *BatchRepository) HasOtherProductInBox(
 	ctx context.Context,
 	boxID int64,
