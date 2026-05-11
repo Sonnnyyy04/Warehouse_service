@@ -227,6 +227,8 @@ func main() {
 			adminHandler.ListWorkersAPI(w, r)
 		case http.MethodPost:
 			adminHandler.CreateWorkerAPI(w, r)
+		case http.MethodPut:
+			adminHandler.UpdateWorkerAPI(w, r)
 		case http.MethodDelete:
 			adminHandler.DeleteWorkerAPI(w, r)
 		default:

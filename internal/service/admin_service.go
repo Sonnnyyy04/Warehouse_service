@@ -102,6 +102,7 @@ type AdminUserRepository interface {
 	ListByRoles(ctx context.Context, roles []string, limit int32) ([]models.User, error)
 	GetByID(ctx context.Context, id int64) (models.User, error)
 	Create(ctx context.Context, login, email, fullName, role, passwordHash string) (models.User, error)
+	Update(ctx context.Context, id int64, fullName, role string, passwordHash *string) (models.User, error)
 	DeleteByID(ctx context.Context, id int64) error
 }
 
@@ -202,6 +203,14 @@ type CreateWorkerInput struct {
 	FullName string
 	Password string
 	Email    string
+	Role     string
+}
+
+type UpdateWorkerInput struct {
+	Actor    models.User
+	ID       int64
+	FullName string
+	Password string
 	Role     string
 }
 
@@ -1163,6 +1172,66 @@ func (s *AdminService) CreateWorker(ctx context.Context, input CreateWorkerInput
 
 	user, err := s.userRepo.Create(ctx, login, email, fullName, role, string(passwordHash))
 	if err != nil {
+		if errors.Is(err, repository.ErrConflict) {
+			return models.User{}, ErrAdminConflict
+		}
+		return models.User{}, err
+	}
+
+	return sanitizeAdminUser(user), nil
+}
+
+func (s *AdminService) UpdateWorker(ctx context.Context, input UpdateWorkerInput) (models.User, error) {
+	fullName := strings.TrimSpace(input.FullName)
+	password := strings.TrimSpace(input.Password)
+	role := strings.TrimSpace(strings.ToLower(input.Role))
+	if role == "" {
+		role = "worker"
+	}
+
+	if input.ID <= 0 || fullName == "" {
+		return models.User{}, ErrInvalidAdminInput
+	}
+	if role != "worker" && role != "admin" {
+		return models.User{}, ErrInvalidAdminInput
+	}
+	if password != "" && (len(password) < 6 || len(password) > 20) {
+		return models.User{}, ErrInvalidAdminPassword
+	}
+
+	targetUser, err := s.userRepo.GetByID(ctx, input.ID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.User{}, ErrInvalidAdminReference
+		}
+		return models.User{}, err
+	}
+
+	if targetUser.IsSuperAdmin && input.Actor.ID != targetUser.ID {
+		return models.User{}, ErrAdminPermissionDenied
+	}
+	if (targetUser.Role == "admin" || role == "admin") && !input.Actor.IsSuperAdmin {
+		return models.User{}, ErrAdminPermissionDenied
+	}
+	if input.Actor.ID == targetUser.ID && role != targetUser.Role {
+		return models.User{}, ErrAdminPermissionDenied
+	}
+
+	var passwordHash *string
+	if password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return models.User{}, err
+		}
+		hashString := string(hash)
+		passwordHash = &hashString
+	}
+
+	user, err := s.userRepo.Update(ctx, input.ID, fullName, role, passwordHash)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.User{}, ErrInvalidAdminReference
+		}
 		if errors.Is(err, repository.ErrConflict) {
 			return models.User{}, ErrAdminConflict
 		}

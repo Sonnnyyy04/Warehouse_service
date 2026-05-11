@@ -21,7 +21,7 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 }
 
 func (r *UserRepository) GetByLogin(ctx context.Context, login string) (models.User, error) {
-const query = `
+	const query = `
 SELECT id, login, email, full_name, role, is_super_admin, password_hash
 FROM users
 WHERE login = $1
@@ -48,7 +48,7 @@ WHERE login = $1
 }
 
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (models.User, error) {
-const query = `
+	const query = `
 SELECT id, login, email, full_name, role, is_super_admin, password_hash
 FROM users
 WHERE id = $1
@@ -79,7 +79,7 @@ func (r *UserRepository) ListByRole(ctx context.Context, role string, limit int3
 }
 
 func (r *UserRepository) ListByRoles(ctx context.Context, roles []string, limit int32) ([]models.User, error) {
-const query = `
+	const query = `
 SELECT id, login, email, full_name, role, is_super_admin, password_hash
 FROM users
 WHERE role = ANY($1)
@@ -121,7 +121,7 @@ LIMIT $2
 }
 
 func (r *UserRepository) Create(ctx context.Context, login, email, fullName, role, passwordHash string) (models.User, error) {
-const query = `
+	const query = `
 INSERT INTO users (login, email, full_name, role, password_hash)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, login, email, full_name, role, is_super_admin, password_hash
@@ -143,6 +143,39 @@ RETURNING id, login, email, full_name, role, is_super_admin, password_hash
 			return models.User{}, ErrConflict
 		}
 		return models.User{}, fmt.Errorf("create user: %w", err)
+	}
+
+	return user, nil
+}
+
+func (r *UserRepository) Update(ctx context.Context, id int64, fullName, role string, passwordHash *string) (models.User, error) {
+	const query = `
+UPDATE users
+SET full_name = $2,
+    role = $3,
+    password_hash = COALESCE($4, password_hash)
+WHERE id = $1
+RETURNING id, login, email, full_name, role, is_super_admin, password_hash
+`
+
+	var user models.User
+	if err := r.pool.QueryRow(ctx, query, id, fullName, role, passwordHash).Scan(
+		&user.ID,
+		&user.Login,
+		&user.Email,
+		&user.FullName,
+		&user.Role,
+		&user.IsSuperAdmin,
+		&user.PasswordHash,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.User{}, ErrNotFound
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return models.User{}, ErrConflict
+		}
+		return models.User{}, fmt.Errorf("update user: %w", err)
 	}
 
 	return user, nil

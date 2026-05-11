@@ -37,6 +37,7 @@ type AdminUseCase interface {
 	UpdateBatch(ctx context.Context, input service.UpdateBatchInput) (models.Batch, error)
 	DeleteBatch(ctx context.Context, id int64) error
 	CreateWorker(ctx context.Context, input service.CreateWorkerInput) (models.User, error)
+	UpdateWorker(ctx context.Context, input service.UpdateWorkerInput) (models.User, error)
 	DeleteWorker(ctx context.Context, actor models.User, userID int64) error
 	ListInboundShipments(ctx context.Context, limit int32) ([]models.InboundShipment, error)
 	GetInboundShipment(ctx context.Context, id int64) (models.InboundShipment, []models.InboundShipmentBox, error)
@@ -59,6 +60,13 @@ type createWorkerRequest struct {
 	FullName string `json:"full_name"`
 	Password string `json:"password"`
 	Email    string `json:"email"`
+	Role     string `json:"role"`
+}
+
+type updateWorkerRequest struct {
+	ID       int64  `json:"id"`
+	FullName string `json:"full_name"`
+	Password string `json:"password"`
 	Role     string `json:"role"`
 }
 
@@ -971,6 +979,50 @@ func (h *AdminHandler) CreateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, worker)
+}
+
+func (h *AdminHandler) UpdateWorkerAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	authUser, ok := userFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	var req updateWorkerRequest
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	worker, err := h.adminUseCase.UpdateWorker(ctx, service.UpdateWorkerInput{
+		Actor:    authUser,
+		ID:       req.ID,
+		FullName: req.FullName,
+		Password: req.Password,
+		Role:     req.Role,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "full_name and role are required; role must be admin or worker"})
+		case errors.Is(err, service.ErrInvalidAdminPassword):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be between 6 and 20 characters"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+		case errors.Is(err, service.ErrAdminPermissionDenied):
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "only super admin can manage admin accounts"})
+		case errors.Is(err, service.ErrAdminConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "user login already exists"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, worker)
 }
 
 func (h *AdminHandler) DeleteWorkerAPI(w http.ResponseWriter, r *http.Request) {
