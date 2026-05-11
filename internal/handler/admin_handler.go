@@ -1014,6 +1014,8 @@ func (h *AdminHandler) UpdateWorkerAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "login must contain only lowercase latin letters"})
 		case errors.Is(err, service.ErrInvalidAdminPassword):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be between 6 and 20 characters"})
+		case errors.Is(err, service.ErrAdminSamePassword):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "new password must be different from current password"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
 		case errors.Is(err, service.ErrAdminPermissionDenied):

@@ -17,6 +17,7 @@ var (
 	ErrInvalidAdminInput          = errors.New("invalid admin input")
 	ErrInvalidAdminLogin          = errors.New("invalid admin login")
 	ErrInvalidAdminPassword       = errors.New("invalid admin password")
+	ErrAdminSamePassword          = errors.New("admin same password")
 	ErrAdminPermissionDenied      = errors.New("admin permission denied")
 	ErrAdminSelfDelete            = errors.New("admin self delete")
 	ErrInvalidAdminImport         = errors.New("invalid admin import")
@@ -1224,6 +1225,10 @@ func (s *AdminService) UpdateWorker(ctx context.Context, input UpdateWorkerInput
 
 	var passwordHash *string
 	if password != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(targetUser.PasswordHash), []byte(password)); err == nil {
+			return models.User{}, ErrAdminSamePassword
+		}
+
 		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
 			return models.User{}, err
