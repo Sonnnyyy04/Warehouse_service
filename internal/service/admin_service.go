@@ -30,6 +30,7 @@ var (
 	ErrAdminConflict              = errors.New("admin conflict")
 	ErrAdminProductExists         = errors.New("admin product exists")
 	ErrAdminRackRequired          = errors.New("rack_id is required")
+	ErrAdminStorageCellRequired   = errors.New("storage_cell_id is required")
 	ErrAdminBoxRequired           = errors.New("box is required for product placement")
 	ErrAdminProductHasBatches     = errors.New("admin product has batches")
 	ErrAdminBoxNotEmpty           = errors.New("admin box not empty")
@@ -788,6 +789,9 @@ func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (mod
 	if code == "" {
 		return models.Box{}, models.Marker{}, ErrInvalidAdminInput
 	}
+	if input.StorageCellID == nil {
+		return models.Box{}, models.Marker{}, ErrAdminStorageCellRequired
+	}
 
 	tx, err := s.txPool.Begin(ctx)
 	if err != nil {
@@ -802,21 +806,19 @@ func (s *AdminService) CreateBox(ctx context.Context, input CreateBoxInput) (mod
 	batchRepo := repository.NewBatchRepositoryWithQuerier(tx)
 	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
 
-	if input.StorageCellID != nil {
-		storageCell, err := storageCellRepo.GetByID(ctx, *input.StorageCellID)
-		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				return models.Box{}, models.Marker{}, ErrInvalidAdminReference
-			}
-			return models.Box{}, models.Marker{}, err
+	storageCell, err := storageCellRepo.GetByID(ctx, *input.StorageCellID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.Box{}, models.Marker{}, ErrInvalidAdminReference
 		}
-		if storageCell.Status != "active" {
-			return models.Box{}, models.Marker{}, ErrStorageCellNotActive
-		}
+		return models.Box{}, models.Marker{}, err
+	}
+	if storageCell.Status != "active" {
+		return models.Box{}, models.Marker{}, ErrStorageCellNotActive
+	}
 
-		if err := ensureStorageCellIsAvailable(ctx, boxRepo, batchRepo, *input.StorageCellID); err != nil {
-			return models.Box{}, models.Marker{}, err
-		}
+	if err := ensureStorageCellIsAvailable(ctx, boxRepo, batchRepo, *input.StorageCellID); err != nil {
+		return models.Box{}, models.Marker{}, err
 	}
 
 	box, err := boxRepo.Create(ctx, code, "active", input.StorageCellID)
@@ -841,6 +843,9 @@ func (s *AdminService) UpdateBox(ctx context.Context, input UpdateBoxInput) (mod
 	if input.ID <= 0 || code == "" {
 		return models.Box{}, ErrInvalidAdminInput
 	}
+	if input.StorageCellID == nil {
+		return models.Box{}, ErrAdminStorageCellRequired
+	}
 
 	currentBox, err := s.boxRepo.GetByID(ctx, input.ID)
 	if err != nil {
@@ -850,21 +855,19 @@ func (s *AdminService) UpdateBox(ctx context.Context, input UpdateBoxInput) (mod
 		return models.Box{}, err
 	}
 
-	if input.StorageCellID != nil {
-		storageCell, err := s.storageCellRepo.GetByID(ctx, *input.StorageCellID)
-		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				return models.Box{}, ErrInvalidAdminReference
-			}
-			return models.Box{}, err
+	storageCell, err := s.storageCellRepo.GetByID(ctx, *input.StorageCellID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return models.Box{}, ErrInvalidAdminReference
 		}
-		if storageCell.Status != "active" {
-			return models.Box{}, ErrStorageCellNotActive
-		}
+		return models.Box{}, err
+	}
+	if storageCell.Status != "active" {
+		return models.Box{}, ErrStorageCellNotActive
+	}
 
-		if err := ensureStorageCellCanAcceptBox(ctx, s.boxRepo, s.batchRepo, *input.StorageCellID, currentBox.ID); err != nil {
-			return models.Box{}, err
-		}
+	if err := ensureStorageCellCanAcceptBox(ctx, s.boxRepo, s.batchRepo, *input.StorageCellID, currentBox.ID); err != nil {
+		return models.Box{}, err
 	}
 
 	box, err := s.boxRepo.Update(ctx, input.ID, code, "active", input.StorageCellID)

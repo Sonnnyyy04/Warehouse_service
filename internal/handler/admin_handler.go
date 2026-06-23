@@ -670,6 +670,8 @@ func (h *AdminHandler) CreateBoxAPI(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrAdminStorageCellRequired):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "storage_cell_id is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "storage cell not found"})
 		case errors.Is(err, service.ErrStorageCellNotActive):
@@ -711,6 +713,8 @@ func (h *AdminHandler) UpdateBoxAPI(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidAdminInput):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		case errors.Is(err, service.ErrAdminStorageCellRequired):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "storage_cell_id is required"})
 		case errors.Is(err, service.ErrInvalidAdminReference):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "box or storage cell not found"})
 		case errors.Is(err, service.ErrStorageCellNotActive):
