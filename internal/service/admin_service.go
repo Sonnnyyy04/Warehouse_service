@@ -37,6 +37,7 @@ var (
 	ErrAdminRackBusy              = errors.New("admin rack busy")
 	ErrInboundShipmentUnresolved  = errors.New("inbound shipment has unresolved items")
 	ErrInboundShipmentGenerated   = errors.New("inbound shipment already generated")
+	ErrInboundShipmentProcessed   = errors.New("inbound shipment already processed")
 )
 
 var latinLoginPattern = regexp.MustCompile(`^[a-z]+$`)
@@ -124,6 +125,7 @@ type AdminInboundShipmentRepository interface {
 	ListBoxes(ctx context.Context, shipmentID int64) ([]models.InboundShipmentBox, error)
 	AssignBoxBatch(ctx context.Context, shipmentBoxID int64, boxID int64, batchID int64) error
 	UpdateStatus(ctx context.Context, shipmentID int64, status string) error
+	DeleteByID(ctx context.Context, id int64) error
 }
 
 type CreateProductInput struct {

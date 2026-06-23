@@ -268,6 +268,8 @@ func main() {
 				return
 			}
 			adminHandler.ListInboundShipmentsAPI(w, r)
+		case http.MethodDelete:
+			adminHandler.DeleteInboundShipmentAPI(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

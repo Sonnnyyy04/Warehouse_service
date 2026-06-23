@@ -41,6 +41,7 @@ type AdminUseCase interface {
 	DeleteWorker(ctx context.Context, actor models.User, userID int64) error
 	ListInboundShipments(ctx context.Context, limit int32) ([]models.InboundShipment, error)
 	GetInboundShipment(ctx context.Context, id int64) (models.InboundShipment, []models.InboundShipmentBox, error)
+	DeleteInboundShipment(ctx context.Context, id int64) error
 	ImportInboundShipment(ctx context.Context, reader io.Reader) (models.InboundShipmentImportResult, error)
 	LinkInboundShipmentItem(ctx context.Context, input service.LinkShipmentItemInput) (models.InboundShipmentItem, error)
 	CreateProductForInboundShipmentItem(ctx context.Context, input service.CreateProductForShipmentItemInput) (models.InboundShipmentItem, error)
@@ -1121,6 +1122,33 @@ func (h *AdminHandler) GetInboundShipmentAPI(w http.ResponseWriter, r *http.Requ
 		Shipment: shipment,
 		Boxes:    boxes,
 	})
+}
+
+func (h *AdminHandler) DeleteInboundShipmentAPI(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var req deleteEntityRequest
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if err := h.adminUseCase.DeleteInboundShipment(ctx, req.ID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidAdminInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid shipment_id"})
+		case errors.Is(err, service.ErrInvalidAdminReference):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "shipment not found"})
+		case errors.Is(err, service.ErrInboundShipmentProcessed):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "processed shipment cannot be deleted"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (h *AdminHandler) ImportInboundShipmentAPI(w http.ResponseWriter, r *http.Request) {

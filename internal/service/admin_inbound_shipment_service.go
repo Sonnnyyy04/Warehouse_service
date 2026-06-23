@@ -63,6 +63,32 @@ func (s *AdminService) GetInboundShipment(ctx context.Context, id int64) (models
 	return shipment, boxes, nil
 }
 
+func (s *AdminService) DeleteInboundShipment(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return ErrInvalidAdminInput
+	}
+
+	shipment, err := s.shipmentRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrInvalidAdminReference
+		}
+		return err
+	}
+	if shipment.Status == "received" {
+		return ErrInboundShipmentProcessed
+	}
+
+	if err := s.shipmentRepo.DeleteByID(ctx, id); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrInvalidAdminReference
+		}
+		return err
+	}
+
+	return nil
+}
+
 func (s *AdminService) ImportInboundShipment(ctx context.Context, reader io.Reader) (models.InboundShipmentImportResult, error) {
 	rows, err := parseInboundShipmentImportRows(reader)
 	if err != nil {

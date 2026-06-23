@@ -479,3 +479,17 @@ WHERE id = $1
 
 	return nil
 }
+
+func (r *InboundShipmentRepository) DeleteByID(ctx context.Context, id int64) error {
+	const query = `DELETE FROM inbound_shipments WHERE id = $1`
+
+	tag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("delete inbound shipment: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
