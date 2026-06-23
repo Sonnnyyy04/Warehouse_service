@@ -111,6 +111,21 @@ RETURNING id, object_type::text, object_id, operation_type, user_id, actor_user_
 	return operation, nil
 }
 
+func (r *OperationHistoryRepository) DeleteByObjectAndType(ctx context.Context, objectType string, objectID int64, operationType string) error {
+	const query = `
+DELETE FROM operation_history
+WHERE object_type = $1::object_type
+  AND object_id = $2
+  AND operation_type = $3
+`
+
+	if _, err := r.db.Exec(ctx, query, strings.TrimSpace(objectType), objectID, strings.TrimSpace(operationType)); err != nil {
+		return fmt.Errorf("delete operation history by object and type: %w", err)
+	}
+
+	return nil
+}
+
 func (r *OperationHistoryRepository) List(
 	ctx context.Context,
 	filter models.OperationHistoryFilter,

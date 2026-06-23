@@ -348,3 +348,24 @@ WHERE id = $1
 
 	return nil
 }
+
+func (r *BoxRepository) DeleteByIDs(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	const query = `
+DELETE FROM boxes
+WHERE id = ANY($1)
+`
+
+	commandTag, err := r.db.Exec(ctx, query, ids)
+	if err != nil {
+		return fmt.Errorf("delete boxes: %w", err)
+	}
+	if int(commandTag.RowsAffected()) != len(ids) {
+		return ErrNotFound
+	}
+
+	return nil
+}

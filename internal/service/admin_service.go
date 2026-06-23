@@ -78,6 +78,7 @@ type AdminBoxRepository interface {
 	Create(ctx context.Context, code, status string, storageCellID *int64) (models.Box, error)
 	Update(ctx context.Context, id int64, code, status string, storageCellID *int64) (models.Box, error)
 	DeleteByID(ctx context.Context, id int64) error
+	DeleteByIDs(ctx context.Context, ids []int64) error
 }
 
 type AdminBatchRepository interface {
@@ -97,6 +98,7 @@ type AdminBatchRepository interface {
 type AdminMarkerRepository interface {
 	Create(ctx context.Context, markerCode, objectType string, objectID int64) (models.Marker, error)
 	DeleteByObject(ctx context.Context, objectType string, objectID int64) error
+	DeleteByObjectIDs(ctx context.Context, objectType string, objectIDs []int64) error
 }
 
 type AdminUserRepository interface {

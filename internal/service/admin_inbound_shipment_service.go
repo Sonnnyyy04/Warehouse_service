@@ -68,22 +68,74 @@ func (s *AdminService) DeleteInboundShipment(ctx context.Context, id int64) erro
 		return ErrInvalidAdminInput
 	}
 
-	shipment, err := s.shipmentRepo.GetByID(ctx, id)
+	tx, err := s.txPool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin delete shipment tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	shipmentRepo := repository.NewInboundShipmentRepositoryWithQuerier(tx)
+	boxRepo := repository.NewBoxRepositoryWithQuerier(tx)
+	batchRepo := repository.NewBatchRepositoryWithQuerier(tx)
+	markerRepo := repository.NewMarkerRepositoryWithQuerier(tx)
+	operationRepo := repository.NewOperationHistoryRepositoryWithQuerier(tx)
+
+	shipment, err := shipmentRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return ErrInvalidAdminReference
 		}
 		return err
 	}
+
 	if shipment.Status != "draft" {
-		return ErrInboundShipmentProcessed
+		boxes, err := shipmentRepo.ListBoxes(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		boxIDs := make([]int64, 0, len(boxes))
+		batchIDs := make([]int64, 0, len(boxes))
+		for _, box := range boxes {
+			if box.StorageCellID != nil {
+				return ErrInboundShipmentProcessed
+			}
+			if box.BoxID != nil {
+				boxIDs = append(boxIDs, *box.BoxID)
+			}
+			if box.BatchID != nil {
+				batchIDs = append(batchIDs, *box.BatchID)
+			}
+		}
+
+		if err := markerRepo.DeleteByObjectIDs(ctx, "batch", batchIDs); err != nil {
+			return err
+		}
+		if err := markerRepo.DeleteByObjectIDs(ctx, "box", boxIDs); err != nil {
+			return err
+		}
+		if err := batchRepo.DeleteByIDs(ctx, batchIDs); err != nil {
+			return err
+		}
+		if err := boxRepo.DeleteByIDs(ctx, boxIDs); err != nil {
+			return err
+		}
+		if err := operationRepo.DeleteByObjectAndType(ctx, "product", id, "inbound_shipment_generated"); err != nil {
+			return err
+		}
 	}
 
-	if err := s.shipmentRepo.DeleteByID(ctx, id); err != nil {
+	if err := shipmentRepo.DeleteByID(ctx, id); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return ErrInvalidAdminReference
 		}
 		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete shipment tx: %w", err)
 	}
 
 	return nil
