@@ -75,7 +75,7 @@ func (s *AdminService) DeleteInboundShipment(ctx context.Context, id int64) erro
 		}
 		return err
 	}
-	if shipment.Status == "received" {
+	if shipment.Status != "draft" {
 		return ErrInboundShipmentProcessed
 	}
 
@@ -305,7 +305,7 @@ func (s *AdminService) GenerateInboundShipment(ctx context.Context, input Genera
 		}
 		return models.InboundShipmentGenerateResult{}, err
 	}
-	if shipment.Status == "received" {
+	if shipment.Status != "draft" {
 		return models.InboundShipmentGenerateResult{}, ErrInboundShipmentGenerated
 	}
 	if shipment.UnresolvedItems > 0 {
@@ -361,7 +361,7 @@ func (s *AdminService) GenerateInboundShipment(ctx context.Context, input Genera
 		}
 	}
 
-	if err := shipmentRepo.UpdateStatus(ctx, input.ShipmentID, "received"); err != nil {
+	if err := shipmentRepo.UpdateStatus(ctx, input.ShipmentID, "generated"); err != nil {
 		return models.InboundShipmentGenerateResult{}, err
 	}
 
